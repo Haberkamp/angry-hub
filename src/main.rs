@@ -296,9 +296,21 @@ impl Render for HelloWorld {
                         .size_full()
                         .flex_1()
                         .overflow_y_scroll()
-                        .p_4()
+                        .flex()
+                        .flex_col()
+                        .items_center()
                         .pt_16()
-                        .children(std::mem::take(&mut content)),
+                        .child(
+                            div()
+                                .id("pr-list")
+                                .w_full()
+                                .max_w(px(560.0))
+                                .flex()
+                                .flex_col()
+                                .px_4()
+                                .pb_4()
+                                .children(std::mem::take(&mut content)),
+                        ),
                 )
             })
             .when(!matches!(self.auth, AuthState::LoggedIn { .. }), |this| {
