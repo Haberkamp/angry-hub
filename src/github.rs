@@ -157,3 +157,71 @@ struct DeviceCodeResponse {
     verification_uri: String,
     interval: Option<u64>,
 }
+
+#[derive(Debug, Clone)]
+pub struct PullRequest {
+    pub title: String,
+    pub repo: String,
+    pub url: String,
+    pub state: String,
+    pub draft: bool,
+}
+
+#[derive(Deserialize)]
+struct SearchResponse {
+    items: Vec<SearchItem>,
+}
+
+#[derive(Deserialize)]
+struct SearchItem {
+    title: String,
+    html_url: String,
+    state: String,
+    draft: Option<bool>,
+    repository_url: String,
+}
+
+fn repo_name_from_url(url: &str) -> String {
+    url.trim_end_matches('/')
+        .rsplit('/')
+        .next()
+        .unwrap_or("unknown")
+        .to_string()
+}
+
+pub fn fetch_my_prs(token: &str) -> Result<Vec<PullRequest>, String> {
+    let client = reqwest::blocking::Client::new();
+    let resp = client
+        .get("https://api.github.com/search/issues")
+        .query(&[
+            ("q", "author:@me type:pr"),
+            ("per_page", "100"),
+            ("sort", "updated"),
+            ("order", "desc"),
+        ])
+        .header("Accept", "application/vnd.github+json")
+        .header("Authorization", format!("Bearer {token}"))
+        .header("User-Agent", "angry-hub")
+        .send()
+        .map_err(|e| format!("request failed: {e}"))?;
+    let status = resp.status();
+    let body = resp
+        .text()
+        .map_err(|e| format!("failed to read response: {e}"))?;
+    if !status.is_success() {
+        return Err(format!("search request failed ({status}): {body}"));
+    }
+    let resp: SearchResponse = serde_json::from_str(&body)
+        .map_err(|e| format!("invalid response: {e}"))?;
+    Ok(resp
+        .items
+        .into_iter()
+        .map(|item| PullRequest {
+            title: item.title,
+            repo: repo_name_from_url(&item.repository_url),
+            url: item.html_url,
+            state: item.state,
+            draft: item.draft.unwrap_or(false),
+        })
+        .collect())
+}

@@ -50,7 +50,16 @@ enum AuthState {
         user_code: Arc<str>,
         verification_uri: Arc<str>,
     },
-    LoggedIn,
+    LoggedIn {
+        prs: PrsState,
+    },
+}
+
+#[derive(Clone)]
+enum PrsState {
+    Loading,
+    Loaded(Vec<github::PullRequest>),
+    Failed(Arc<str>),
 }
 
 struct HelloWorld {
@@ -58,6 +67,29 @@ struct HelloWorld {
 }
 
 impl HelloWorld {
+    fn load_prs(&mut self, cx: &mut Context<Self>) {
+        let Some(token) = github::load_saved_token() else {
+            return;
+        };
+        cx.spawn(async move |this, cx| {
+            let result = cx
+                .background_executor()
+                .spawn(async move { github::fetch_my_prs(&token) })
+                .await;
+            this.update(cx, |this, _cx| {
+                if let AuthState::LoggedIn { prs } = &mut this.auth {
+                    *prs = match result {
+                        Ok(prs) => PrsState::Loaded(prs),
+                        Err(e) => PrsState::Failed(e.into()),
+                    };
+                }
+            })
+            .ok();
+            this.update(cx, |_, cx| cx.notify()).ok();
+        })
+        .detach();
+    }
+
     fn start_login(&mut self, cx: &mut Context<Self>) {
         self.auth = AuthState::RequestingCode { error: None };
         cx.notify();
@@ -78,9 +110,12 @@ impl HelloWorld {
                             .background_executor()
                             .spawn(async move { github::poll_for_token(&code) })
                             .await;
-                        this.update(cx, |this, _cx| match result {
+                        this.update(cx, |this, cx| match result {
                             Ok(github::LoginState::Success) => {
-                                this.auth = AuthState::LoggedIn;
+                                this.auth = AuthState::LoggedIn {
+                                    prs: PrsState::Loading,
+                                };
+                                this.load_prs(cx);
                             }
                             Err(e) => {
                                 this.auth = AuthState::RequestingCode { error: Some(e.into()) };
@@ -126,7 +161,7 @@ impl HelloWorld {
 
 impl Render for HelloWorld {
     fn render(&mut self, _window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
-        let content = match &self.auth {
+        let mut content = match &self.auth {
             AuthState::LoggedOut => {
                 vec![
                     div().child("Not logged in").into_any_element(),
@@ -164,10 +199,66 @@ impl Render for HelloWorld {
                     .into_any_element(),
                 div().child(format!("Visit: {}", verification_uri)).into_any_element(),
             ],
-            AuthState::LoggedIn => vec![],
+            AuthState::LoggedIn { prs } => match prs {
+                PrsState::Loading => vec![div().child("Loading PRs...").into_any_element()],
+                PrsState::Failed(e) => vec![
+                    div()
+                        .text_color(rgb(0xff6666))
+                        .child(e.to_string())
+                        .into_any_element(),
+                    Button::new("retry-prs", "Retry")
+                        .on_click(cx.listener(|state, _, _, cx| state.load_prs(cx)))
+                        .into_any_element(),
+                ],
+                PrsState::Loaded(prs) => {
+                    if prs.is_empty() {
+                        vec![div().child("No PRs found").into_any_element()]
+                    } else {
+                        prs.iter()
+                            .enumerate()
+                            .map(|(ix, pr)| {
+                                let state_label = if pr.draft {
+                                    format!("{} (draft)", pr.state)
+                                } else {
+                                    pr.state.clone()
+                                };
+                                let state_color = if pr.state == "open" {
+                                    rgb(0x3fb950)
+                                } else {
+                                    rgb(0x8b949e)
+                                };
+                                div()
+                                    .id(("pr", ix))
+                                    .flex()
+                                    .flex_col()
+                                    .gap_1()
+                                    .py_2()
+                                    .child(
+                                        div()
+                                            .flex()
+                                            .gap_2()
+                                            .items_baseline()
+                                            .child(
+                                                div()
+                                                    .text_color(state_color)
+                                                    .child(state_label),
+                                            )
+                                            .child(
+                                                div()
+                                                    .text_color(rgb(0x8b949e))
+                                                    .child(pr.repo.clone()),
+                                            ),
+                                    )
+                                    .child(div().child(pr.title.clone()))
+                            })
+                            .map(|el| el.into_any_element())
+                            .collect()
+                    }
+                }
+            },
         };
 
-        let logout_button = if matches!(self.auth, AuthState::LoggedIn) {
+        let logout_button = if matches!(self.auth, AuthState::LoggedIn { .. }) {
             Some(
                 div()
                     .id("logout-container")
@@ -192,13 +283,27 @@ impl Render for HelloWorld {
             .size_full()
             .flex()
             .flex_col()
-            .items_center()
-            .justify_center()
-            .gap_4()
             .relative()
             .bg(rgb(0x1e1e1e))
             .text_color(rgb(0xffffff))
-            .children(content)
+            .when(!matches!(self.auth, AuthState::LoggedIn { .. }), |this| {
+                this.items_center().justify_center().gap_4()
+            })
+            .when(matches!(self.auth, AuthState::LoggedIn { .. }), |this| {
+                this.child(
+                    div()
+                        .id("pr-scroll")
+                        .size_full()
+                        .flex_1()
+                        .overflow_y_scroll()
+                        .p_4()
+                        .pt_16()
+                        .children(std::mem::take(&mut content)),
+                )
+            })
+            .when(!matches!(self.auth, AuthState::LoggedIn { .. }), |this| {
+                this.children(content)
+            })
             .children(logout_button)
     }
 }
@@ -224,12 +329,19 @@ fn main() {
                 ..Default::default()
             },
             |_window, cx| {
-                cx.new(|_| HelloWorld {
-                    auth: if github::load_saved_token().is_some() {
-                        AuthState::LoggedIn
-                    } else {
-                        AuthState::LoggedOut
-                    },
+                let auth = if github::load_saved_token().is_some() {
+                    AuthState::LoggedIn {
+                        prs: PrsState::Loading,
+                    }
+                } else {
+                    AuthState::LoggedOut
+                };
+                cx.new(|cx| {
+                    let mut view = HelloWorld { auth };
+                    if matches!(view.auth, AuthState::LoggedIn { .. }) {
+                        view.load_prs(cx);
+                    }
+                    view
                 })
             },
         )
