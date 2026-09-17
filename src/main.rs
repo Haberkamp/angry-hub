@@ -13,12 +13,12 @@ mod datasource;
 mod github;
 mod icon;
 mod model;
+mod pr_status;
 mod tab;
 
 use button::Button;
 use datasource::CodeHost;
 use icon::{Icon, IconName};
-use model::PullRequestState;
 use tab::Tab;
 
 fn code_host() -> std::sync::Arc<dyn CodeHost> {
@@ -227,7 +227,7 @@ impl Render for HelloWorld {
                 PrsState::Loaded(prs) => {
                     let active: Vec<&model::PullRequest> = prs
                         .iter()
-                        .filter(|pr| pr.state != PullRequestState::Merged)
+                        .filter(|pr| *pr.status() != model::PrStatus::Merged)
                         .collect();
 
                     let repos: Vec<Arc<str>> = {
@@ -287,16 +287,6 @@ impl Render for HelloWorld {
                             .iter()
                             .enumerate()
                             .map(|(ix, pr)| {
-                                let state_label = if pr.draft {
-                                    format!("{} (draft)", pr.state.label())
-                                } else {
-                                    pr.state.label().to_string()
-                                };
-                                let state_color = match pr.state {
-                                    PullRequestState::Open => rgb(0x3fb950),
-                                    PullRequestState::Merged => rgb(0xa371f7),
-                                    PullRequestState::Closed => rgb(0x8b949e),
-                                };
                                 let url = pr.url.clone();
                                 div()
                                     .id(("pr", ix))
@@ -313,12 +303,13 @@ impl Render for HelloWorld {
                                         div()
                                             .flex()
                                             .gap_2()
-                                            .items_baseline()
-                                            .child(
-                                                div()
-                                                    .text_color(state_color)
-                                                    .child(state_label),
-                                            )
+                                            .items_center()
+                                            .child(pr_status::PrStatusIcon::new(
+                                                pr.status().clone(),
+                                            ))
+                                            .child(pr_status::PrStatusLabel::new(
+                                                pr.status().clone(),
+                                            ))
                                             .child(
                                                 div()
                                                     .text_color(rgb(0x8b949e))

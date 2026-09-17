@@ -2,18 +2,29 @@
 //! they describe *what* the app knows, not *how* it was fetched.
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub enum PullRequestState {
+pub enum PrStatus {
     Open,
+    Draft,
     Closed,
     Merged,
 }
 
-impl PullRequestState {
+impl PrStatus {
     pub fn label(&self) -> &'static str {
         match self {
-            PullRequestState::Open => "open",
-            PullRequestState::Closed => "closed",
-            PullRequestState::Merged => "merged",
+            PrStatus::Open => "Open",
+            PrStatus::Draft => "Draft",
+            PrStatus::Closed => "Closed",
+            PrStatus::Merged => "Merged",
+        }
+    }
+
+    pub fn color(&self) -> gpui::Hsla {
+        match self {
+            PrStatus::Open => gpui::rgb(0x3fb950).into(),
+            PrStatus::Draft => gpui::rgb(0x6e7681).into(),
+            PrStatus::Closed => gpui::rgb(0x8b949e).into(),
+            PrStatus::Merged => gpui::rgb(0xa371f7).into(),
         }
     }
 }
@@ -24,8 +35,13 @@ pub struct PullRequest {
     pub repo: String,
     #[allow(dead_code)]
     pub url: String,
-    pub state: PullRequestState,
-    pub draft: bool,
+    pub status: PrStatus,
+}
+
+impl PullRequest {
+    pub fn status(&self) -> &PrStatus {
+        &self.status
+    }
 }
 
 #[derive(Debug, Clone)]

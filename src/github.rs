@@ -8,7 +8,7 @@ use serde::{Deserialize, Serialize};
 use crate::datasource::{
     AuthStore, AuthSuccess, CodeHost, DataSourceError, DataSourceResult,
 };
-use crate::model::{DeviceCode, PullRequest, PullRequestState};
+use crate::model::{DeviceCode, PrStatus, PullRequest};
 
 const GITHUB_CLIENT_ID: &str = "Ov23li14mBVzqgdBi3HH";
 
@@ -174,6 +174,7 @@ impl CodeHost for GithubApi {
             html_url: String,
             state: String,
             draft: Option<bool>,
+            updated_at: String,
             pull_request: Option<PullRequestMarker>,
             repository_url: String,
         }
@@ -216,14 +217,18 @@ impl CodeHost for GithubApi {
                     title: item.title,
                     repo: repo_name_from_url(&item.repository_url),
                     url: item.html_url,
-                    state: if is_pr && item.state == "closed" {
-                        PullRequestState::Merged
+                    status: if is_pr && item.state == "closed" {
+                        PrStatus::Merged
                     } else if item.state == "open" {
-                        PullRequestState::Open
+                        if item.draft.unwrap_or(false) {
+                            PrStatus::Draft
+                        } else {
+                            PrStatus::Open
+                        }
                     } else {
-                        PullRequestState::Closed
+                        PrStatus::Closed
                     },
-                    draft: item.draft.unwrap_or(false),
+                    updated_at: item.updated_at,
                 }
             })
             .collect())

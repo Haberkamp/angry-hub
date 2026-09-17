@@ -5,12 +5,18 @@ use gpui::{
 #[derive(Clone, Copy)]
 pub enum IconName {
     Logout,
+    PullRequest,
+    PrClosed,
+    PrDraft,
 }
 
 impl IconName {
     fn path(self) -> &'static str {
         match self {
             IconName::Logout => "icons/logout.svg",
+            IconName::PullRequest => "icons/pull_request.svg",
+            IconName::PrClosed => "icons/pr_closed.svg",
+            IconName::PrDraft => "icons/pr_draft.svg",
         }
     }
 }
