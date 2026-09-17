@@ -4,8 +4,8 @@ use std::path::PathBuf;
 use std::sync::Arc;
 
 use gpui::{
-    div, prelude::*, px, rgb, size, App, Application, AssetSource, Bounds, Context, PromptLevel,
-    Render, Result, SharedString, TitlebarOptions, Window, WindowBounds, WindowOptions,
+    div, prelude::*, px, rgb, size, AnyElement, App, Application, AssetSource, Bounds, Context,
+    PromptLevel, Render, Result, SharedString, TitlebarOptions, Window, WindowBounds, WindowOptions,
 };
 
 mod button;
@@ -13,11 +13,13 @@ mod datasource;
 mod github;
 mod icon;
 mod model;
+mod tab;
 
 use button::Button;
 use datasource::CodeHost;
 use icon::{Icon, IconName};
 use model::PullRequestState;
+use tab::Tab;
 
 fn code_host() -> std::sync::Arc<dyn CodeHost> {
     std::sync::Arc::new(github::GithubApi::new())
@@ -72,6 +74,7 @@ enum PrsState {
 
 struct HelloWorld {
     auth: AuthState,
+    selected_repo: Option<Arc<str>>,
 }
 
 impl HelloWorld {
@@ -171,6 +174,7 @@ impl HelloWorld {
 
 impl Render for HelloWorld {
     fn render(&mut self, _window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+        let mut repo_tabs: Vec<AnyElement> = Vec::new();
         let mut content = match &self.auth {
             AuthState::LoggedOut => {
                 vec![
@@ -221,14 +225,65 @@ impl Render for HelloWorld {
                         .into_any_element(),
                 ],
                 PrsState::Loaded(prs) => {
-                    let active: Vec<_> = prs
+                    let active: Vec<&model::PullRequest> = prs
                         .iter()
                         .filter(|pr| pr.state != PullRequestState::Merged)
                         .collect();
-                    if active.is_empty() {
+
+                    let repos: Vec<Arc<str>> = {
+                        let mut seen: Vec<Arc<str>> = Vec::new();
+                        for pr in &active {
+                            let repo: Arc<str> = pr.repo.clone().into();
+                            if !seen.contains(&repo) {
+                                seen.push(repo);
+                            }
+                        }
+                        seen
+                    };
+
+                    let selected = self
+                        .selected_repo
+                        .clone()
+                        .filter(|r| repos.contains(r) || r.as_ref() == "all");
+
+                    let visible: Vec<&model::PullRequest> = active
+                        .iter()
+                        .copied()
+                        .filter(|pr| match selected.as_deref() {
+                            Some("all") | None => true,
+                            Some(repo) => repo == pr.repo.as_str(),
+                        })
+                        .collect();
+
+                    repo_tabs.push(
+                        Tab::new("repo-tab-all", "All")
+                            .selected(selected.as_deref() == Some("all"))
+                            .on_click(cx.listener(|state, _, _, cx| {
+                                state.selected_repo = Some("all".into());
+                                cx.notify();
+                            }))
+                            .into_any_element(),
+                    );
+                    repo_tabs.extend(repos.iter().enumerate().map(|(ix, repo)| {
+                        Tab::new(
+                            SharedString::from(format!("repo-tab-{ix}")),
+                            repo.to_string(),
+                        )
+                        .selected(Some(repo.as_ref()) == selected.as_deref())
+                        .on_click(cx.listener({
+                            let repo = repo.clone();
+                            move |state, _, _, cx| {
+                                state.selected_repo = Some(repo.clone());
+                                cx.notify();
+                            }
+                        }))
+                        .into_any_element()
+                    }));
+
+                    if visible.is_empty() {
                         vec![div().child("No PRs found").into_any_element()]
                     } else {
-                        active
+                        visible
                             .iter()
                             .enumerate()
                             .map(|(ix, pr)| {
@@ -330,6 +385,18 @@ impl Render for HelloWorld {
                                 .flex_col()
                                 .px_4()
                                 .pb_4()
+                                .when(!repo_tabs.is_empty(), |this| {
+                                    this.child(
+                                        div()
+                                            .id("repo-tabs")
+                                            .flex()
+                                            .flex_wrap()
+                                            .gap_2()
+                                            .pl_3()
+                                            .pb_4()
+                                            .children(std::mem::take(&mut repo_tabs)),
+                                    )
+                                })
                                 .children(std::mem::take(&mut content)),
                         ),
                 )
@@ -370,7 +437,10 @@ fn main() {
                     AuthState::LoggedOut
                 };
                 cx.new(|cx| {
-                    let mut view = HelloWorld { auth };
+                    let mut view = HelloWorld {
+                        auth,
+                        selected_repo: Some("all".into()),
+                    };
                     if matches!(view.auth, AuthState::LoggedIn { .. }) {
                         view.load_prs(cx);
                     }
