@@ -15,12 +15,14 @@ mod github;
 mod icon;
 mod model;
 mod pr_status;
+mod spinner;
 mod tab;
 
 use button::Button;
 use datasource::CodeHost;
 use gpui_selectable_text::SelectableText;
 use icon::{Icon, IconName};
+use spinner::Spinner;
 use tab::Tab;
 
 fn code_host() -> std::sync::Arc<dyn CodeHost> {
@@ -78,6 +80,7 @@ struct HelloWorld {
     auth: AuthState,
     selected_repo: Option<Arc<str>>,
     refreshing: bool,
+    loading: bool,
     _activation_subscription: Option<Subscription>,
 }
 
@@ -91,24 +94,30 @@ impl HelloWorld {
             auth,
             selected_repo: Some("all".into()),
             refreshing: false,
+            loading: false,
             _activation_subscription: None,
         };
         view._activation_subscription = Some(cx.observe_window_activation(
             window,
             |this, window, cx| {
                 if window.is_window_active() && matches!(this.auth, AuthState::LoggedIn { .. }) {
-                    this.load_prs(cx);
+                    this.refresh_prs(cx);
                 }
             },
         ));
         if matches!(view.auth, AuthState::LoggedIn { .. }) {
-            view.load_prs(cx);
+            view.loading = true;
+            view.fetch_prs(cx);
         }
         view
     }
 
-    fn load_prs(&mut self, cx: &mut Context<Self>) {
+    fn refresh_prs(&mut self, cx: &mut Context<Self>) {
         self.refreshing = true;
+        self.fetch_prs(cx);
+    }
+
+    fn fetch_prs(&mut self, cx: &mut Context<Self>) {
         let host = code_host();
         cx.spawn(async move |this, cx| {
             let result = cx
@@ -117,6 +126,7 @@ impl HelloWorld {
                 .await;
             this.update(cx, |this, _cx| {
                 this.refreshing = false;
+                this.loading = false;
                 if let AuthState::LoggedIn { prs } = &mut this.auth {
                     *prs = match result {
                         Ok(prs) => PrsState::Loaded(prs),
@@ -157,7 +167,8 @@ impl HelloWorld {
                                 this.auth = AuthState::LoggedIn {
                                     prs: PrsState::Loading,
                                 };
-                                this.load_prs(cx);
+                                this.loading = true;
+                                this.fetch_prs(cx);
                             }
                             Err(e) => {
                                 this.auth =
@@ -215,7 +226,7 @@ impl Render for HelloWorld {
                 ]
             }
             AuthState::RequestingCode { error } => {
-                let mut children = vec![Button::new("requesting", "Requesting device code...")
+                let mut children = vec![Button::new("login", "Log in with GitHub")
                     .is_loading(true)
                     .into_any_element()];
                 if let Some(e) = error {
@@ -252,14 +263,20 @@ impl Render for HelloWorld {
                     .into_any_element(),
             ],
             AuthState::LoggedIn { prs } => match prs {
-                PrsState::Loading => vec![div().child("Loading PRs...").into_any_element()],
+                PrsState::Loading => vec![div()
+                    .flex()
+                    .flex_1()
+                    .items_center()
+                    .justify_center()
+                    .child(Spinner::new("prs-loading"))
+                    .into_any_element()],
                 PrsState::Failed(e) => vec![
                     div()
                         .text_color(rgb(0xff6666))
                         .child(e.to_string())
                         .into_any_element(),
                     Button::new("retry-prs", "Retry")
-                        .on_click(cx.listener(|state, _, _, cx| state.load_prs(cx)))
+                        .on_click(cx.listener(|state, _, _, cx| state.refresh_prs(cx)))
                         .into_any_element(),
                 ],
                 PrsState::Loaded(prs) => {
@@ -374,14 +391,8 @@ impl Render for HelloWorld {
                     .flex()
                     .items_center()
                     .gap_2()
-                    .when(self.refreshing, |this| {
-                        this.child(
-                            div()
-                                .id("refreshing")
-                                .text_color(rgb(0x8b949e))
-                                .text_size(px(13.0))
-                                .child("Loading..."),
-                        )
+                    .when(self.refreshing && !self.loading, |this| {
+                        this.child(div().id("refreshing").child(Spinner::new("refreshing")))
                     })
                     .child(
                         Button::new("logout", "")
@@ -417,7 +428,13 @@ impl Render for HelloWorld {
                         .flex()
                         .flex_col()
                         .items_center()
-                        .pt_16()
+                        .when(
+                            !matches!(
+                                self.auth,
+                                AuthState::LoggedIn { prs: PrsState::Loading }
+                            ),
+                            |this| this.pt_16(),
+                        )
                         .child(
                             div()
                                 .id("pr-list")
@@ -425,6 +442,7 @@ impl Render for HelloWorld {
                                 .max_w(px(560.0))
                                 .flex()
                                 .flex_col()
+                                .flex_1()
                                 .px_4()
                                 .pb_4()
                                 .when(!repo_tabs.is_empty(), |this| {

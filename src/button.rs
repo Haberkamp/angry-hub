@@ -102,6 +102,7 @@ impl RenderOnce for Button {
         let label = self.label.clone();
         let icon = self.icon.clone();
         let is_loading = self.is_loading;
+        let id = self.id.clone();
 
         let mut element = div()
             .id(self.id)
@@ -121,6 +122,9 @@ impl RenderOnce for Button {
             .rounded_md()
             .text_color(style.text)
             .children(icon)
+            .when(is_loading, |this| {
+                this.child(crate::spinner::Spinner::new(format!("{}-spinner", id)))
+            })
             .children(label);
 
         if let Some(border) = style.border {
