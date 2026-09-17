@@ -25,6 +25,9 @@ use icon::{Icon, IconName};
 use spinner::Spinner;
 use tab::Tab;
 
+const DEFAULT_WINDOW_SIZE: gpui::Size<gpui::Pixels> =
+    size(px(800.0), px(600.0));
+
 fn code_host() -> std::sync::Arc<dyn CodeHost> {
     std::sync::Arc::new(github::GithubApi::new())
 }
@@ -465,6 +468,12 @@ impl Render for HelloWorld {
                 this.children(content)
             })
             .children(top_right)
+            .on_mouse_down(gpui::MouseButton::Left, |event, window, _| {
+                const TITLEBAR_HEIGHT: gpui::Pixels = px(28.0);
+                if event.click_count == 2 && event.position.y < TITLEBAR_HEIGHT {
+                    window.resize(DEFAULT_WINDOW_SIZE);
+                }
+            })
     }
 }
 
@@ -479,10 +488,10 @@ fn main() {
             WindowOptions {
                 window_bounds: Some(WindowBounds::Windowed(Bounds::centered(
                     None,
-                    size(px(800.0), px(600.0)),
+                    DEFAULT_WINDOW_SIZE,
                     cx,
                 ))),
-                window_min_size: Some(size(px(480.0), px(640.0))),
+                window_min_size: Some(size(px(480.0), px(600.0))),
                 titlebar: Some(TitlebarOptions {
                     appears_transparent: true,
                     ..Default::default()
