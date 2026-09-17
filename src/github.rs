@@ -68,7 +68,6 @@ pub fn save_token(access_token: &str) {
 
 pub enum LoginState {
     Success,
-    Failure(String),
 }
 
 pub fn logout() {

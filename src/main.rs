@@ -46,10 +46,6 @@ impl HelloWorld {
                             Ok(github::LoginState::Success) => {
                                 this.auth = AuthState::LoggedIn;
                             }
-                            Ok(github::LoginState::Failure(msg)) => {
-                                this.auth =
-                                    AuthState::RequestingCode { error: Some(msg.into()) };
-                            }
                             Err(e) => {
                                 this.auth = AuthState::RequestingCode { error: Some(e.into()) };
                             }
