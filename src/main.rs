@@ -9,11 +9,19 @@ use gpui::{
 };
 
 mod button;
+mod datasource;
 mod github;
 mod icon;
+mod model;
 
 use button::Button;
+use datasource::CodeHost;
 use icon::{Icon, IconName};
+use model::PullRequestState;
+
+fn code_host() -> std::sync::Arc<dyn CodeHost> {
+    std::sync::Arc::new(github::GithubApi::new())
+}
 
 struct Assets {
     base: PathBuf,
@@ -58,7 +66,7 @@ enum AuthState {
 #[derive(Clone)]
 enum PrsState {
     Loading,
-    Loaded(Vec<github::PullRequest>),
+    Loaded(Vec<model::PullRequest>),
     Failed(Arc<str>),
 }
 
@@ -68,19 +76,17 @@ struct HelloWorld {
 
 impl HelloWorld {
     fn load_prs(&mut self, cx: &mut Context<Self>) {
-        let Some(token) = github::load_saved_token() else {
-            return;
-        };
+        let host = code_host();
         cx.spawn(async move |this, cx| {
             let result = cx
                 .background_executor()
-                .spawn(async move { github::fetch_my_prs(&token) })
+                .spawn(async move { host.my_pull_requests() })
                 .await;
             this.update(cx, |this, _cx| {
                 if let AuthState::LoggedIn { prs } = &mut this.auth {
                     *prs = match result {
                         Ok(prs) => PrsState::Loaded(prs),
-                        Err(e) => PrsState::Failed(e.into()),
+                        Err(e) => PrsState::Failed(e.message.into()),
                     };
                 }
             })
@@ -93,10 +99,12 @@ impl HelloWorld {
     fn start_login(&mut self, cx: &mut Context<Self>) {
         self.auth = AuthState::RequestingCode { error: None };
         cx.notify();
+        let host = code_host();
+        let poll_host = host.clone();
         cx.spawn(async move |this, cx| {
             let result = cx
                 .background_executor()
-                .spawn(async move { github::request_device_code() })
+                .spawn(async move { host.start_login() })
                 .await;
             this.update(cx, |this, cx| match result {
                 Ok(code) => {
@@ -108,17 +116,18 @@ impl HelloWorld {
                     cx.spawn(async move |this, cx| {
                         let result = cx
                             .background_executor()
-                            .spawn(async move { github::poll_for_token(&code) })
+                            .spawn(async move { poll_host.await_login(&code) })
                             .await;
                         this.update(cx, |this, cx| match result {
-                            Ok(github::LoginState::Success) => {
+                            Ok(_) => {
                                 this.auth = AuthState::LoggedIn {
                                     prs: PrsState::Loading,
                                 };
                                 this.load_prs(cx);
                             }
                             Err(e) => {
-                                this.auth = AuthState::RequestingCode { error: Some(e.into()) };
+                                this.auth =
+                                    AuthState::RequestingCode { error: Some(e.message.into()) };
                             }
                         })
                         .ok();
@@ -127,7 +136,7 @@ impl HelloWorld {
                     .detach();
                 }
                 Err(e) => {
-                    this.auth = AuthState::RequestingCode { error: Some(e.into()) };
+                    this.auth = AuthState::RequestingCode { error: Some(e.message.into()) };
                     cx.notify();
                 }
             })
@@ -145,10 +154,11 @@ impl HelloWorld {
             &["Logout", "Cancel"],
             cx,
         );
+        let host = code_host();
         cx.spawn(async move |this, cx| {
             if answer.await == Ok(0) {
                 this.update(cx, |this, cx| {
-                    github::logout();
+                    host.logout();
                     this.auth = AuthState::LoggedOut;
                     cx.notify();
                 })
@@ -211,21 +221,26 @@ impl Render for HelloWorld {
                         .into_any_element(),
                 ],
                 PrsState::Loaded(prs) => {
-                    if prs.is_empty() {
+                    let active: Vec<_> = prs
+                        .iter()
+                        .filter(|pr| pr.state != PullRequestState::Merged)
+                        .collect();
+                    if active.is_empty() {
                         vec![div().child("No PRs found").into_any_element()]
                     } else {
-                        prs.iter()
+                        active
+                            .iter()
                             .enumerate()
                             .map(|(ix, pr)| {
                                 let state_label = if pr.draft {
-                                    format!("{} (draft)", pr.state)
+                                    format!("{} (draft)", pr.state.label())
                                 } else {
-                                    pr.state.clone()
+                                    pr.state.label().to_string()
                                 };
-                                let state_color = if pr.state == "open" {
-                                    rgb(0x3fb950)
-                                } else {
-                                    rgb(0x8b949e)
+                                let state_color = match pr.state {
+                                    PullRequestState::Open => rgb(0x3fb950),
+                                    PullRequestState::Merged => rgb(0xa371f7),
+                                    PullRequestState::Closed => rgb(0x8b949e),
                                 };
                                 div()
                                     .id(("pr", ix))
@@ -341,7 +356,7 @@ fn main() {
                 ..Default::default()
             },
             |_window, cx| {
-                let auth = if github::load_saved_token().is_some() {
+                let auth = if code_host().has_saved_session() {
                     AuthState::LoggedIn {
                         prs: PrsState::Loading,
                     }
