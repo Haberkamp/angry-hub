@@ -36,6 +36,7 @@ pub struct PullRequest {
     #[allow(dead_code)]
     pub url: String,
     pub status: PrStatus,
+    pub updated_at: String,
 }
 
 impl PullRequest {

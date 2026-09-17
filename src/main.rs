@@ -246,7 +246,7 @@ impl Render for HelloWorld {
                         .clone()
                         .filter(|r| repos.contains(r) || r.as_ref() == "all");
 
-                    let visible: Vec<&model::PullRequest> = active
+                    let mut visible: Vec<&model::PullRequest> = active
                         .iter()
                         .copied()
                         .filter(|pr| match selected.as_deref() {
@@ -254,6 +254,7 @@ impl Render for HelloWorld {
                             Some(repo) => repo == pr.repo.as_str(),
                         })
                         .collect();
+                    visible.sort_by(|a, b| b.updated_at.cmp(&a.updated_at));
 
                     repo_tabs.push(
                         Tab::new("repo-tab-all", "All")
