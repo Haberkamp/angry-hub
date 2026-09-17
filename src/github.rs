@@ -235,11 +235,12 @@ impl CodeHost for GithubApi {
 }
 
 fn repo_name_from_url(url: &str) -> String {
-    url.trim_end_matches('/')
-        .rsplit('/')
-        .next()
-        .unwrap_or("unknown")
-        .to_string()
+    let url = url.trim_end_matches('/');
+    let segments: Vec<&str> = url.rsplitn(3, '/').collect();
+    match segments.as_slice() {
+        [name, owner, ..] => format!("{owner}/{name}"),
+        _ => url.to_string(),
+    }
 }
 
 /// Stores the OAuth token as JSON in the user's config directory.
