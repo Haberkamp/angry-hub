@@ -1,6 +1,3 @@
-//! Domain data structures. These are UI-agnostic and API-agnostic:
-//! they describe *what* the app knows, not *how* it was fetched.
-
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
