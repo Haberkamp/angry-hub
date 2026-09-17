@@ -5,7 +5,8 @@ use std::sync::Arc;
 
 use gpui::{
     div, prelude::*, px, rgb, size, AnyElement, App, Application, AssetSource, Bounds, Context,
-    PromptLevel, Render, Result, SharedString, TitlebarOptions, Window, WindowBounds, WindowOptions,
+    FontWeight, PromptLevel, Render, Result, SharedString, TitlebarOptions, Window, WindowBounds,
+    WindowOptions,
 };
 
 mod button;
@@ -18,6 +19,7 @@ mod tab;
 
 use button::Button;
 use datasource::CodeHost;
+use gpui_selectable_text::SelectableText;
 use icon::{Icon, IconName};
 use tab::Tab;
 
@@ -181,15 +183,15 @@ impl Render for HelloWorld {
         let mut content = match &self.auth {
             AuthState::LoggedOut => {
                 vec![
-                    div().child("Not logged in").into_any_element(),
                     Button::new("login", "Log in with GitHub")
                         .on_click(cx.listener(|state, _, _, cx| state.start_login(cx)))
                         .into_any_element(),
                 ]
             }
             AuthState::RequestingCode { error } => {
-                let mut children =
-                    vec![div().child("Requesting device code...").into_any_element()];
+                let mut children = vec![Button::new("requesting", "Requesting device code...")
+                    .is_loading(true)
+                    .into_any_element()];
                 if let Some(e) = error {
                     children.push(
                         div()
@@ -209,12 +211,19 @@ impl Render for HelloWorld {
                 user_code,
                 verification_uri,
             } => vec![
-                div().child("Waiting for authorization...").into_any_element(),
                 div()
-                    .text_xl()
-                    .child(format!("Code: {}", user_code))
+                    .text_3xl()
+                    .font_weight(FontWeight::SEMIBOLD)
+                    .child(SelectableText::new("otp-code", user_code.to_string()))
                     .into_any_element(),
-                div().child(format!("Visit: {}", verification_uri)).into_any_element(),
+                Button::new("open-verification", "Open verification page")
+                    .on_click(cx.listener({
+                        let verification_uri = verification_uri.clone();
+                        move |_, _, _, cx| {
+                            cx.open_url(&verification_uri);
+                        }
+                    }))
+                    .into_any_element(),
             ],
             AuthState::LoggedIn { prs } => match prs {
                 PrsState::Loading => vec![div().child("Loading PRs...").into_any_element()],
@@ -421,6 +430,7 @@ fn main() {
             base: PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("assets"),
         })
         .run(|cx: &mut App| {
+        gpui_selectable_text::register_keyboard_bridge(cx).detach();
         cx.open_window(
             WindowOptions {
                 window_bounds: Some(WindowBounds::Windowed(Bounds::centered(

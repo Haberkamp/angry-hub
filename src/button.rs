@@ -16,6 +16,7 @@ pub struct Button {
     label: Option<gpui::SharedString>,
     icon: Option<crate::icon::Icon>,
     variant: ButtonVariant,
+    is_loading: bool,
     on_click: Option<
         Box<dyn Fn(&ClickEvent, &mut Window, &mut App) + 'static>,
     >,
@@ -62,6 +63,7 @@ impl Button {
             label: if label.is_empty() { None } else { Some(label) },
             icon: None,
             variant: ButtonVariant::Primary,
+            is_loading: false,
             on_click: None,
         }
     }
@@ -80,6 +82,11 @@ impl Button {
         self
     }
 
+    pub fn is_loading(mut self, is_loading: bool) -> Self {
+        self.is_loading = is_loading;
+        self
+    }
+
     pub fn on_click(
         mut self,
         listener: impl Fn(&ClickEvent, &mut Window, &mut App) + 'static,
@@ -94,6 +101,7 @@ impl RenderOnce for Button {
         let style = self.variant.style();
         let label = self.label.clone();
         let icon = self.icon.clone();
+        let is_loading = self.is_loading;
 
         let mut element = div()
             .id(self.id)
@@ -104,10 +112,13 @@ impl RenderOnce for Button {
             .justify_center()
             .gap_2()
             .bg(style.bg)
-            .hover(move |this| this.bg(style.hover_bg))
-            .active(move |this| this.bg(style.active_bg))
+            .when(!is_loading, |this| {
+                this.hover(move |this| this.bg(style.hover_bg))
+                    .active(move |this| this.bg(style.active_bg))
+                    .cursor_pointer()
+            })
+            .when(is_loading, |this| this.cursor_default().opacity(0.6))
             .rounded_md()
-            .cursor_pointer()
             .text_color(style.text)
             .children(icon)
             .children(label);
@@ -117,9 +128,11 @@ impl RenderOnce for Button {
         }
 
         if let Some(on_click) = self.on_click {
-            element = element.on_click(move |event: &ClickEvent, window, cx| {
-                on_click(event, window, cx)
-            });
+            if !is_loading {
+                element = element.on_click(move |event: &ClickEvent, window, cx| {
+                    on_click(event, window, cx)
+                });
+            }
         }
 
         element
