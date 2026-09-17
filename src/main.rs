@@ -1,6 +1,6 @@
 use gpui::{
-    div, prelude::*, px, rgb, size, App, Application, Bounds, Context, Window, WindowBounds,
-    WindowOptions,
+    div, prelude::*, px, rgb, size, App, Application, Bounds, Context, TitlebarOptions, Window,
+    WindowBounds, WindowOptions,
 };
 
 struct HelloWorld;
@@ -28,6 +28,10 @@ fn main() {
                     size(px(800.0), px(600.0)),
                     cx,
                 ))),
+                titlebar: Some(TitlebarOptions {
+                    appears_transparent: true,
+                    ..Default::default()
+                }),
                 ..Default::default()
             },
             |_window, cx| cx.new(|_| HelloWorld),
