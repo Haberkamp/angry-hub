@@ -173,24 +173,18 @@ impl CodeHost for GithubApi {
         struct SearchItem {
             title: String,
             html_url: String,
-            state: String,
             draft: Option<bool>,
             updated_at: String,
-            pull_request: Option<PullRequestMarker>,
             repository_url: String,
         }
-        #[derive(Deserialize)]
-        struct PullRequestMarker {}
 
         let token = self.bearer()?;
         let resp = self
             .client
             .get("https://api.github.com/search/issues")
             .query(&[
-                ("q", "author:@me type:pr"),
+                ("q", "author:@me type:pr is:open"),
                 ("per_page", "100"),
-                ("sort", "updated"),
-                ("order", "desc"),
             ])
             .header("Accept", "application/vnd.github+json")
             .header("Authorization", format!("Bearer {token}"))
@@ -213,21 +207,14 @@ impl CodeHost for GithubApi {
             .items
             .into_iter()
             .map(|item| {
-                let is_pr = item.pull_request.is_some();
                 PullRequest {
                     title: item.title,
                     repo: repo_name_from_url(&item.repository_url),
                     url: item.html_url,
-                    status: if is_pr && item.state == "closed" {
-                        PrStatus::Merged
-                    } else if item.state == "open" {
-                        if item.draft.unwrap_or(false) {
-                            PrStatus::Draft
-                        } else {
-                            PrStatus::Open
-                        }
+                    status: if item.draft.unwrap_or(false) {
+                        PrStatus::Draft
                     } else {
-                        PrStatus::Closed
+                        PrStatus::Open
                     },
                     updated_at: item.updated_at,
                 }

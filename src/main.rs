@@ -283,10 +283,7 @@ impl Render for HelloWorld {
                         .into_any_element(),
                 ],
                 PrsState::Loaded(prs) => {
-                    let active: Vec<&model::PullRequest> = prs
-                        .iter()
-                        .filter(|pr| *pr.status() != model::PrStatus::Merged)
-                        .collect();
+                    let active: Vec<&model::PullRequest> = prs.iter().collect();
 
                     let repos: Vec<Arc<str>> = {
                         let mut seen: Vec<Arc<str>> = Vec::new();
