@@ -1,13 +1,46 @@
-use gpui::{
-    div, prelude::*, px, rgb, size, App, Application, Bounds, Context, PromptLevel, Render,
-    TitlebarOptions, Window, WindowBounds, WindowOptions,
-};
+use std::borrow::Cow;
+use std::fs;
+use std::path::PathBuf;
 use std::sync::Arc;
+
+use gpui::{
+    div, prelude::*, px, rgb, size, App, Application, AssetSource, Bounds, Context, PromptLevel,
+    Render, Result, SharedString, TitlebarOptions, Window, WindowBounds, WindowOptions,
+};
 
 mod button;
 mod github;
+mod icon;
 
 use button::Button;
+use icon::{Icon, IconName};
+
+struct Assets {
+    base: PathBuf,
+}
+
+impl AssetSource for Assets {
+    fn load(&self, path: &str) -> Result<Option<Cow<'static, [u8]>>> {
+        fs::read(self.base.join(path))
+            .map(|data| Some(Cow::Owned(data)))
+            .map_err(|err| err.into())
+    }
+
+    fn list(&self, path: &str) -> Result<Vec<SharedString>> {
+        fs::read_dir(self.base.join(path))
+            .map(|entries| {
+                entries
+                    .filter_map(|entry| {
+                        entry
+                            .ok()
+                            .and_then(|entry| entry.file_name().into_string().ok())
+                            .map(SharedString::from)
+                    })
+                    .collect()
+            })
+            .map_err(|err| err.into())
+    }
+}
 
 #[derive(Clone)]
 enum AuthState {
@@ -131,28 +164,51 @@ impl Render for HelloWorld {
                     .into_any_element(),
                 div().child(format!("Visit: {}", verification_uri)).into_any_element(),
             ],
-            AuthState::LoggedIn => vec![
-                Button::new("logout", "Logout")
-                    .on_click(cx.listener(|state, _, window, cx| state.logout(window, cx)))
-                    .into_any_element(),
-            ],
+            AuthState::LoggedIn => vec![],
+        };
+
+        let logout_button = if matches!(self.auth, AuthState::LoggedIn) {
+            Some(
+                div()
+                    .id("logout-container")
+                    .absolute()
+                    .top_4()
+                    .right_4()
+                    .child(
+                        Button::new("logout", "")
+                            .icon(Icon::new(IconName::Logout).size(px(20.0)))
+                            .tertiary()
+                            .on_click(cx.listener(|state, _, window, cx| {
+                                state.logout(window, cx)
+                            })),
+                    ),
+            )
+        } else {
+            None
         };
 
         div()
+            .id("root")
             .size_full()
             .flex()
             .flex_col()
             .items_center()
             .justify_center()
             .gap_4()
+            .relative()
             .bg(rgb(0x1e1e1e))
             .text_color(rgb(0xffffff))
             .children(content)
+            .children(logout_button)
     }
 }
 
 fn main() {
-    Application::new().run(|cx: &mut App| {
+    Application::new()
+        .with_assets(Assets {
+            base: PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("assets"),
+        })
+        .run(|cx: &mut App| {
         cx.open_window(
             WindowOptions {
                 window_bounds: Some(WindowBounds::Windowed(Bounds::centered(

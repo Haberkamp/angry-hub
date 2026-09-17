@@ -1,24 +1,83 @@
 use gpui::{
-    div, prelude::*, rgb, App, ClickEvent, InteractiveElement, IntoElement, ParentElement,
+    div, prelude::*, rgb, App, ClickEvent, Hsla, InteractiveElement, IntoElement, ParentElement,
     RenderOnce, Styled, Window,
 };
+
+#[derive(Clone, Copy, Default, PartialEq, Eq)]
+pub enum ButtonVariant {
+    #[default]
+    Primary,
+    Tertiary,
+}
 
 #[derive(IntoElement)]
 pub struct Button {
     id: gpui::SharedString,
-    label: gpui::SharedString,
+    label: Option<gpui::SharedString>,
+    icon: Option<crate::icon::Icon>,
+    variant: ButtonVariant,
     on_click: Option<
         Box<dyn Fn(&ClickEvent, &mut Window, &mut App) + 'static>,
     >,
 }
 
+struct ButtonStyle {
+    bg: Hsla,
+    hover_bg: Hsla,
+    active_bg: Hsla,
+    border: Option<Hsla>,
+    text: Hsla,
+}
+
+fn h(c: u32) -> Hsla {
+    rgb(c).into()
+}
+
+impl ButtonVariant {
+    fn style(self) -> ButtonStyle {
+        match self {
+            ButtonVariant::Primary => ButtonStyle {
+                bg: h(0x2d2d2d),
+                hover_bg: h(0x3d3d3d),
+                active_bg: h(0x444444),
+                border: Some(h(0x555555)),
+                text: h(0xffffff),
+            },
+            ButtonVariant::Tertiary => ButtonStyle {
+                bg: h(0x1e1e1e),
+                hover_bg: h(0x333333),
+                active_bg: h(0x3a3a3a),
+                border: None,
+                text: h(0xaaaaaa),
+            },
+        }
+    }
+}
+
 impl Button {
     pub fn new(id: impl Into<gpui::SharedString>, label: impl Into<gpui::SharedString>) -> Self {
+        let label: gpui::SharedString = label.into();
         Self {
             id: id.into(),
-            label: label.into(),
+            label: if label.is_empty() { None } else { Some(label) },
+            icon: None,
+            variant: ButtonVariant::Primary,
             on_click: None,
         }
+    }
+
+    pub fn variant(mut self, variant: ButtonVariant) -> Self {
+        self.variant = variant;
+        self
+    }
+
+    pub fn tertiary(self) -> Self {
+        self.variant(ButtonVariant::Tertiary)
+    }
+
+    pub fn icon(mut self, icon: crate::icon::Icon) -> Self {
+        self.icon = Some(icon);
+        self
     }
 
     pub fn on_click(
@@ -32,7 +91,10 @@ impl Button {
 
 impl RenderOnce for Button {
     fn render(self, _window: &mut Window, _cx: &mut App) -> impl IntoElement {
+        let style = self.variant.style();
         let label = self.label.clone();
+        let icon = self.icon.clone();
+
         let mut element = div()
             .id(self.id)
             .px_4()
@@ -40,15 +102,19 @@ impl RenderOnce for Button {
             .flex()
             .items_center()
             .justify_center()
-            .bg(rgb(0x2d2d2d))
-            .hover(|this| this.bg(rgb(0x3d3d3d)))
-            .active(|this| this.bg(rgb(0x444444)))
-            .border_1()
-            .border_color(rgb(0x555555))
+            .gap_2()
+            .bg(style.bg)
+            .hover(move |this| this.bg(style.hover_bg))
+            .active(move |this| this.bg(style.active_bg))
             .rounded_md()
             .cursor_pointer()
-            .text_color(rgb(0xffffff))
-            .child(label);
+            .text_color(style.text)
+            .children(icon)
+            .children(label);
+
+        if let Some(border) = style.border {
+            element = element.border_1().border_color(border);
+        }
 
         if let Some(on_click) = self.on_click {
             element = element.on_click(move |event: &ClickEvent, window, cx| {
