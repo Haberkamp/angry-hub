@@ -66,6 +66,7 @@ version = "0.1.0"
 dependencies = [
  "dirs 5.0.1",
  "gpui",
+ "gpui-selectable-text",
  "reqwest",
  "serde",
  "serde_json",
@@ -2195,6 +2196,16 @@ dependencies = [
  "proc-macro2",
  "quote",
  "syn 2.0.119",
+]
+
+[[package]]
+name = "gpui-selectable-text"
+version = "0.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "8ac5280ec93090e0f40702b57fea99b6e4046e8739ce95bc4a26f9e35d934055"
+dependencies = [
+ "gpui",
+ "unicode-segmentation",
 ]
 
 [[package]]
