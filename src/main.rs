@@ -75,10 +75,12 @@ enum PrsState {
 struct HelloWorld {
     auth: AuthState,
     selected_repo: Option<Arc<str>>,
+    refreshing: bool,
 }
 
 impl HelloWorld {
     fn load_prs(&mut self, cx: &mut Context<Self>) {
+        self.refreshing = true;
         let host = code_host();
         cx.spawn(async move |this, cx| {
             let result = cx
@@ -86,6 +88,7 @@ impl HelloWorld {
                 .spawn(async move { host.my_pull_requests() })
                 .await;
             this.update(cx, |this, _cx| {
+                this.refreshing = false;
                 if let AuthState::LoggedIn { prs } = &mut this.auth {
                     *prs = match result {
                         Ok(prs) => PrsState::Loaded(prs),
@@ -326,13 +329,25 @@ impl Render for HelloWorld {
             },
         };
 
-        let logout_button = if matches!(self.auth, AuthState::LoggedIn { .. }) {
+        let top_right = if matches!(self.auth, AuthState::LoggedIn { .. }) {
             Some(
                 div()
-                    .id("logout-container")
+                    .id("top-right")
                     .absolute()
                     .top_4()
                     .right_4()
+                    .flex()
+                    .items_center()
+                    .gap_2()
+                    .when(self.refreshing, |this| {
+                        this.child(
+                            div()
+                                .id("refreshing")
+                                .text_color(rgb(0x8b949e))
+                                .text_size(px(13.0))
+                                .child("Loading..."),
+                        )
+                    })
                     .child(
                         Button::new("logout", "")
                             .icon(Icon::new(IconName::Logout).size(px(20.0)))
@@ -396,7 +411,7 @@ impl Render for HelloWorld {
             .when(!matches!(self.auth, AuthState::LoggedIn { .. }), |this| {
                 this.children(content)
             })
-            .children(logout_button)
+            .children(top_right)
     }
 }
 
@@ -422,9 +437,11 @@ fn main() {
             },
             |_window, cx| {
                 let auth = if code_host().has_saved_session() {
-                    AuthState::LoggedIn {
-                        prs: PrsState::Loading,
-                    }
+                    let prs = match github::PrsCache::load() {
+                        Some(prs) if !prs.is_empty() => PrsState::Loaded(prs),
+                        _ => PrsState::Loading,
+                    };
+                    AuthState::LoggedIn { prs }
                 } else {
                     AuthState::LoggedOut
                 };
@@ -432,6 +449,7 @@ fn main() {
                     let mut view = HelloWorld {
                         auth,
                         selected_repo: Some("all".into()),
+                        refreshing: false,
                     };
                     if matches!(view.auth, AuthState::LoggedIn { .. }) {
                         view.load_prs(cx);

@@ -9,6 +9,7 @@ use crate::datasource::{
     AuthStore, AuthSuccess, CodeHost, DataSourceError, DataSourceResult,
 };
 use crate::model::{DeviceCode, PrStatus, PullRequest};
+use std::path::PathBuf;
 
 const GITHUB_CLIENT_ID: &str = "Ov23li14mBVzqgdBi3HH";
 
@@ -208,7 +209,7 @@ impl CodeHost for GithubApi {
         let resp: SearchResponse = serde_json::from_str(&body)
             .map_err(|e| DataSourceError::new(format!("invalid response: {e}")))?;
 
-        Ok(resp
+        let prs: Vec<PullRequest> = resp
             .items
             .into_iter()
             .map(|item| {
@@ -231,11 +232,14 @@ impl CodeHost for GithubApi {
                     updated_at: item.updated_at,
                 }
             })
-            .collect())
+            .collect();
+        PrsCache::save(&prs);
+        Ok(prs)
     }
 
     fn logout(&self) {
         self.token_store.clear();
+        PrsCache::clear();
     }
 }
 
@@ -261,6 +265,34 @@ fn token_path() -> std::path::PathBuf {
         .unwrap_or_else(|| std::path::PathBuf::from("."))
         .join("angry-hub")
         .join("token.json")
+}
+
+fn prs_cache_path() -> PathBuf {
+    dirs::config_dir()
+        .unwrap_or_else(|| PathBuf::from("."))
+        .join("angry-hub")
+        .join("prs.json")
+}
+
+pub struct PrsCache;
+
+impl PrsCache {
+    pub fn load() -> Option<Vec<PullRequest>> {
+        let contents = std::fs::read_to_string(prs_cache_path()).ok()?;
+        serde_json::from_str(&contents).ok()
+    }
+
+    pub fn save(prs: &[PullRequest]) {
+        let path = prs_cache_path();
+        let _ = std::fs::create_dir_all(path.parent().unwrap());
+        if let Ok(json) = serde_json::to_string(prs) {
+            let _ = std::fs::write(path, json);
+        }
+    }
+
+    pub fn clear() {
+        let _ = std::fs::remove_file(prs_cache_path());
+    }
 }
 
 impl AuthStore for FileTokenStore {

@@ -1,7 +1,9 @@
 //! Domain data structures. These are UI-agnostic and API-agnostic:
 //! they describe *what* the app knows, not *how* it was fetched.
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+use serde::{Deserialize, Serialize};
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub enum PrStatus {
     Open,
     Draft,
@@ -29,7 +31,7 @@ impl PrStatus {
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct PullRequest {
     pub title: String,
     pub repo: String,
