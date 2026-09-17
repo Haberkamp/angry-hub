@@ -1,159 +1,319 @@
+//! Concrete implementation of the `datasource` traits for GitHub:
+//! OAuth device flow + REST search API, backed by a filesystem token store.
+
 use std::{thread, time::Duration};
 
 use serde::{Deserialize, Serialize};
+
+use crate::datasource::{
+    AuthStore, AuthSuccess, CodeHost, DataSourceError, DataSourceResult,
+};
+use crate::model::{DeviceCode, PrStatus, PullRequest};
+use std::path::PathBuf;
 
 const GITHUB_CLIENT_ID: &str = "Ov23li14mBVzqgdBi3HH";
 
 const DEVICE_CODE_URL: &str = "https://github.com/login/device/code";
 const ACCESS_TOKEN_URL: &str = "https://github.com/login/oauth/access_token";
 
-#[derive(Serialize)]
-struct DeviceCodeRequest {
-    client_id: &'static str,
-    scope: &'static str,
+pub struct GithubApi {
+    client: reqwest::blocking::Client,
+    token_store: FileTokenStore,
 }
 
-#[derive(Debug)]
-pub struct DeviceCode {
-    pub device_code: String,
-    pub user_code: String,
-    pub verification_uri: String,
-    interval: u64,
+impl GithubApi {
+    pub fn new() -> Self {
+        Self {
+            client: reqwest::blocking::Client::new(),
+            token_store: FileTokenStore,
+        }
+    }
+
+    fn token(&self) -> Option<String> {
+        self.token_store.load_token()
+    }
+
+    fn bearer(&self) -> DataSourceResult<String> {
+        self.token()
+            .ok_or_else(|| DataSourceError::new("not logged in"))
+    }
 }
 
-#[derive(Serialize)]
-struct AccessTokenRequest {
-    client_id: &'static str,
-    device_code: String,
-    grant_type: &'static str,
+impl Default for GithubApi {
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
-#[derive(Deserialize)]
-struct AccessTokenResponse {
-    access_token: Option<String>,
-    error: Option<String>,
-    #[serde(rename = "error_description")]
-    error_description: Option<String>,
+impl CodeHost for GithubApi {
+    fn has_saved_session(&self) -> bool {
+        self.token().is_some()
+    }
+
+    fn start_login(&self) -> DataSourceResult<DeviceCode> {
+        #[derive(Serialize)]
+        struct Request {
+            client_id: &'static str,
+            scope: &'static str,
+        }
+        #[derive(Deserialize)]
+        struct Response {
+            device_code: String,
+            user_code: String,
+            verification_uri: String,
+            interval: Option<u64>,
+        }
+
+        let resp = self
+            .client
+            .post(DEVICE_CODE_URL)
+            .header("Accept", "application/json")
+            .json(&Request {
+                client_id: GITHUB_CLIENT_ID,
+                scope: "notifications repo read:user",
+            })
+            .send()
+            .map_err(|e| DataSourceError::new(format!("request failed: {e}")))?;
+        let status = resp.status();
+        let body = resp
+            .text()
+            .map_err(|e| DataSourceError::new(format!("failed to read response: {e}")))?;
+        if !status.is_success() {
+            return Err(DataSourceError::new(format!(
+                "device code request failed ({status}): {body}"
+            )));
+        }
+        let resp: Response = serde_json::from_str(&body)
+            .map_err(|e| DataSourceError::new(format!("invalid response: {e}")))?;
+
+        Ok(DeviceCode {
+            device_code: resp.device_code,
+            user_code: resp.user_code,
+            verification_uri: resp.verification_uri,
+            poll_interval_secs: resp.interval.unwrap_or(5).max(5),
+        })
+    }
+
+    fn await_login(&self, code: &DeviceCode) -> DataSourceResult<AuthSuccess> {
+        #[derive(Serialize)]
+        struct Request {
+            client_id: &'static str,
+            device_code: String,
+            grant_type: &'static str,
+        }
+        #[derive(Deserialize)]
+        struct Response {
+            access_token: Option<String>,
+            error: Option<String>,
+            #[serde(rename = "error_description")]
+            error_description: Option<String>,
+        }
+
+        loop {
+            thread::sleep(Duration::from_secs(code.poll_interval_secs));
+
+            let resp = self
+                .client
+                .post(ACCESS_TOKEN_URL)
+                .header("Accept", "application/json")
+                .json(&Request {
+                    client_id: GITHUB_CLIENT_ID,
+                    device_code: code.device_code.clone(),
+                    grant_type: "urn:ietf:params:oauth:grant-type:device_code",
+                })
+                .send()
+                .map_err(|e| DataSourceError::new(format!("request failed: {e}")))?;
+            let status = resp.status();
+            let body = resp
+                .text()
+                .map_err(|e| {
+                    DataSourceError::new(format!("failed to read response: {e}"))
+                })?;
+            if !status.is_success() {
+                return Err(DataSourceError::new(format!(
+                    "token request failed ({status}): {body}"
+                )));
+            }
+            let resp: Response = serde_json::from_str(&body)
+                .map_err(|e| DataSourceError::new(format!("invalid response: {e}")))?;
+
+            if let Some(token) = resp.access_token {
+                self.token_store.save_token(&token);
+                return Ok(AuthSuccess);
+            }
+
+            match resp.error.as_deref() {
+                Some("authorization_pending") => continue,
+                Some("slow_down") => {
+                    // GitHub requires backing off; handled by next iteration's interval
+                    continue;
+                }
+                Some("expired_token") => {
+                    return Err(DataSourceError::new("device code expired"))
+                }
+                Some("access_denied") => {
+                    return Err(DataSourceError::new("user denied access"))
+                }
+                Some(other) => {
+                    return Err(DataSourceError::new(
+                        resp.error_description.unwrap_or_else(|| other.to_string()),
+                    ))
+                }
+                None => return Err(DataSourceError::new("unknown error")),
+            }
+        }
+    }
+
+    fn my_pull_requests(&self) -> DataSourceResult<Vec<PullRequest>> {
+        #[derive(Deserialize)]
+        struct SearchResponse {
+            items: Vec<SearchItem>,
+        }
+        #[derive(Deserialize)]
+        struct SearchItem {
+            title: String,
+            html_url: String,
+            state: String,
+            draft: Option<bool>,
+            updated_at: String,
+            pull_request: Option<PullRequestMarker>,
+            repository_url: String,
+        }
+        #[derive(Deserialize)]
+        struct PullRequestMarker {}
+
+        let token = self.bearer()?;
+        let resp = self
+            .client
+            .get("https://api.github.com/search/issues")
+            .query(&[
+                ("q", "author:@me type:pr"),
+                ("per_page", "100"),
+                ("sort", "updated"),
+                ("order", "desc"),
+            ])
+            .header("Accept", "application/vnd.github+json")
+            .header("Authorization", format!("Bearer {token}"))
+            .header("User-Agent", "angry-hub")
+            .send()
+            .map_err(|e| DataSourceError::new(format!("request failed: {e}")))?;
+        let status = resp.status();
+        let body = resp
+            .text()
+            .map_err(|e| DataSourceError::new(format!("failed to read response: {e}")))?;
+        if !status.is_success() {
+            return Err(DataSourceError::new(format!(
+                "search request failed ({status}): {body}"
+            )));
+        }
+        let resp: SearchResponse = serde_json::from_str(&body)
+            .map_err(|e| DataSourceError::new(format!("invalid response: {e}")))?;
+
+        let prs: Vec<PullRequest> = resp
+            .items
+            .into_iter()
+            .map(|item| {
+                let is_pr = item.pull_request.is_some();
+                PullRequest {
+                    title: item.title,
+                    repo: repo_name_from_url(&item.repository_url),
+                    url: item.html_url,
+                    status: if is_pr && item.state == "closed" {
+                        PrStatus::Merged
+                    } else if item.state == "open" {
+                        if item.draft.unwrap_or(false) {
+                            PrStatus::Draft
+                        } else {
+                            PrStatus::Open
+                        }
+                    } else {
+                        PrStatus::Closed
+                    },
+                    updated_at: item.updated_at,
+                }
+            })
+            .collect();
+        PrsCache::save(&prs);
+        Ok(prs)
+    }
+
+    fn logout(&self) {
+        self.token_store.clear();
+        PrsCache::clear();
+    }
 }
+
+fn repo_name_from_url(url: &str) -> String {
+    let url = url.trim_end_matches('/');
+    let segments: Vec<&str> = url.rsplitn(3, '/').collect();
+    match segments.as_slice() {
+        [name, owner, ..] => format!("{owner}/{name}"),
+        _ => url.to_string(),
+    }
+}
+
+/// Stores the OAuth token as JSON in the user's config directory.
+pub struct FileTokenStore;
 
 #[derive(Deserialize, Serialize)]
 struct StoredToken {
     access_token: String,
 }
 
-pub fn token_path() -> std::path::PathBuf {
+fn token_path() -> std::path::PathBuf {
     dirs::config_dir()
         .unwrap_or_else(|| std::path::PathBuf::from("."))
         .join("angry-hub")
         .join("token.json")
 }
 
-pub fn load_saved_token() -> Option<String> {
-    let path = token_path();
-    let contents = std::fs::read_to_string(path).ok()?;
-    let stored: StoredToken = serde_json::from_str(&contents).ok()?;
-    Some(stored.access_token)
+fn prs_cache_path() -> PathBuf {
+    dirs::config_dir()
+        .unwrap_or_else(|| PathBuf::from("."))
+        .join("angry-hub")
+        .join("prs.json")
 }
 
-pub fn save_token(access_token: &str) {
-    let path = token_path();
-    let _ = std::fs::create_dir_all(path.parent().unwrap());
-    let stored = StoredToken {
-        access_token: access_token.to_string(),
-    };
-    if let Ok(json) = serde_json::to_string(&stored) {
-        let _ = std::fs::write(path, json);
+pub struct PrsCache;
+
+impl PrsCache {
+    pub fn load() -> Option<Vec<PullRequest>> {
+        let contents = std::fs::read_to_string(prs_cache_path()).ok()?;
+        serde_json::from_str(&contents).ok()
+    }
+
+    pub fn save(prs: &[PullRequest]) {
+        let path = prs_cache_path();
+        let _ = std::fs::create_dir_all(path.parent().unwrap());
+        if let Ok(json) = serde_json::to_string(prs) {
+            let _ = std::fs::write(path, json);
+        }
+    }
+
+    pub fn clear() {
+        let _ = std::fs::remove_file(prs_cache_path());
     }
 }
 
-pub enum LoginState {
-    Success,
-}
-
-pub fn logout() {
-    let _ = std::fs::remove_file(token_path());
-}
-
-pub fn request_device_code() -> Result<DeviceCode, String> {
-    let client = reqwest::blocking::Client::new();
-    let resp = client
-        .post(DEVICE_CODE_URL)
-        .header("Accept", "application/json")
-        .json(&DeviceCodeRequest {
-            client_id: GITHUB_CLIENT_ID,
-            scope: "notifications repo read:user",
-        })
-        .send()
-        .map_err(|e| format!("request failed: {e}"))?;
-    let status = resp.status();
-    let body = resp
-        .text()
-        .map_err(|e| format!("failed to read response: {e}"))?;
-    if !status.is_success() {
-        return Err(format!("device code request failed ({status}): {body}"));
+impl AuthStore for FileTokenStore {
+    fn load_token(&self) -> Option<String> {
+        let contents = std::fs::read_to_string(token_path()).ok()?;
+        let stored: StoredToken = serde_json::from_str(&contents).ok()?;
+        Some(stored.access_token)
     }
-    let resp: DeviceCodeResponse = serde_json::from_str(&body)
-        .map_err(|e| format!("invalid response: {e} (body: {body})"))?;
-    Ok(DeviceCode {
-        device_code: resp.device_code,
-        user_code: resp.user_code,
-        verification_uri: resp.verification_uri,
-        interval: resp.interval.unwrap_or(5).max(5),
-    })
-}
 
-pub fn poll_for_token(code: &DeviceCode) -> Result<LoginState, String> {
-    let client = reqwest::blocking::Client::new();
-    loop {
-        thread::sleep(Duration::from_secs(code.interval));
-
-        let resp = client
-            .post(ACCESS_TOKEN_URL)
-            .header("Accept", "application/json")
-            .json(&AccessTokenRequest {
-                client_id: GITHUB_CLIENT_ID,
-                device_code: code.device_code.clone(),
-                grant_type: "urn:ietf:params:oauth:grant-type:device_code",
-            })
-            .send()
-            .map_err(|e| format!("request failed: {e}"))?;
-        let status = resp.status();
-        let body = resp
-            .text()
-            .map_err(|e| format!("failed to read response: {e}"))?;
-        if !status.is_success() {
-            return Err(format!("token request failed ({status}): {body}"));
-        }
-        let resp: AccessTokenResponse = serde_json::from_str(&body)
-            .map_err(|e| format!("invalid response: {e} (body: {body})"))?;
-
-        if let Some(token) = resp.access_token {
-            save_token(&token);
-            return Ok(LoginState::Success);
-        }
-
-        match resp.error.as_deref() {
-            Some("authorization_pending") => continue,
-            Some("slow_down") => {
-                // GitHub requires backing off; handled by next iteration's interval
-                continue;
-            }
-            Some("expired_token") => return Err("device code expired".into()),
-            Some("access_denied") => return Err("user denied access".into()),
-            Some(other) => {
-                return Err(resp
-                    .error_description
-                    .unwrap_or_else(|| other.to_string()))
-            }
-            None => return Err("unknown error".into()),
+    fn save_token(&self, token: &str) {
+        let path = token_path();
+        let _ = std::fs::create_dir_all(path.parent().unwrap());
+        let stored = StoredToken {
+            access_token: token.to_string(),
+        };
+        if let Ok(json) = serde_json::to_string(&stored) {
+            let _ = std::fs::write(path, json);
         }
     }
-}
 
-#[derive(Deserialize)]
-struct DeviceCodeResponse {
-    device_code: String,
-    user_code: String,
-    verification_uri: String,
-    interval: Option<u64>,
+    fn clear(&self) {
+        let _ = std::fs::remove_file(token_path());
+    }
 }
