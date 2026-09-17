@@ -242,12 +242,18 @@ impl Render for HelloWorld {
                                     PullRequestState::Merged => rgb(0xa371f7),
                                     PullRequestState::Closed => rgb(0x8b949e),
                                 };
+                                let url = pr.url.clone();
                                 div()
                                     .id(("pr", ix))
                                     .flex()
                                     .flex_col()
                                     .gap_1()
                                     .py_2()
+                                    .px_3()
+                                    .rounded_md()
+                                    .hover(|this| this.bg(rgb(0x2a2a2a)))
+                                    .cursor_pointer()
+                                    .on_click(move |_, _window, cx| cx.open_url(&url))
                                     .child(
                                         div()
                                             .flex()
