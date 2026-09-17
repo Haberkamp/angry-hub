@@ -2,11 +2,12 @@ use std::borrow::Cow;
 use std::fs;
 use std::path::PathBuf;
 use std::sync::Arc;
+use std::time::{Duration, Instant};
 
 use gpui::{
-    div, prelude::*, px, rgb, size, AnyElement, App, Application, AssetSource, Bounds, Context,
-    FontWeight, PromptLevel, Render, Result, SharedString, Subscription, TitlebarOptions,
-    Window, WindowBounds, WindowOptions,
+    div, ease_in_out, prelude::*, px, rgb, size, AnyElement, App, Application, AssetSource, Bounds,
+    Context, FontWeight, MouseDownEvent, PromptLevel, Render, Result, SharedString, Subscription,
+    Timer, TitlebarOptions, Window, WindowBounds, WindowOptions,
 };
 
 mod button;
@@ -27,6 +28,7 @@ use tab::Tab;
 
 const DEFAULT_WINDOW_SIZE: gpui::Size<gpui::Pixels> =
     size(px(800.0), px(600.0));
+const RESTORE_ANIMATION: Duration = Duration::from_millis(250);
 
 fn code_host() -> std::sync::Arc<dyn CodeHost> {
     std::sync::Arc::new(github::GithubApi::new())
@@ -84,6 +86,7 @@ struct HelloWorld {
     selected_repo: Option<Arc<str>>,
     refreshing: bool,
     loading: bool,
+    resize_generation: u64,
     _activation_subscription: Option<Subscription>,
 }
 
@@ -98,6 +101,7 @@ impl HelloWorld {
             selected_repo: Some("all".into()),
             refreshing: false,
             loading: false,
+            resize_generation: 0,
             _activation_subscription: None,
         };
         view._activation_subscription = Some(cx.observe_window_activation(
@@ -190,6 +194,43 @@ impl HelloWorld {
             })
             .ok();
             this.update(cx, |_, cx| cx.notify()).ok();
+        })
+        .detach();
+    }
+
+    fn animate_restore_window(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        let from = window.viewport_size();
+        let to = DEFAULT_WINDOW_SIZE;
+        if from == to {
+            return;
+        }
+
+        self.resize_generation = self.resize_generation.wrapping_add(1);
+        let generation = self.resize_generation;
+        let started = Instant::now();
+
+        cx.spawn_in(window, async move |this, cx| {
+            loop {
+                let t = (started.elapsed().as_secs_f32() / RESTORE_ANIMATION.as_secs_f32())
+                    .min(1.0);
+                let e = ease_in_out(t);
+                let width = from.width + (to.width - from.width) * e;
+                let height = from.height + (to.height - from.height) * e;
+                let keep_going = this
+                    .update_in(cx, |this, window, _cx| {
+                        if this.resize_generation != generation {
+                            false
+                        } else {
+                            window.resize(size(width, height));
+                            true
+                        }
+                    })
+                    .unwrap_or(false);
+                if !keep_going || t >= 1.0 {
+                    break;
+                }
+                Timer::after(Duration::from_millis(8)).await;
+            }
         })
         .detach();
     }
@@ -465,12 +506,15 @@ impl Render for HelloWorld {
                 this.children(content)
             })
             .children(top_right)
-            .on_mouse_down(gpui::MouseButton::Left, |event, window, _| {
-                const TITLEBAR_HEIGHT: gpui::Pixels = px(28.0);
-                if event.click_count == 2 && event.position.y < TITLEBAR_HEIGHT {
-                    window.resize(DEFAULT_WINDOW_SIZE);
-                }
-            })
+            .on_mouse_down(
+                gpui::MouseButton::Left,
+                cx.listener(|this, event: &MouseDownEvent, window, cx| {
+                    const TITLEBAR_HEIGHT: gpui::Pixels = px(28.0);
+                    if event.click_count == 2 && event.position.y < TITLEBAR_HEIGHT {
+                        this.animate_restore_window(window, cx);
+                    }
+                }),
+            )
     }
 }
 
