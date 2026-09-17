@@ -5,8 +5,8 @@ use std::sync::Arc;
 
 use gpui::{
     div, prelude::*, px, rgb, size, AnyElement, App, Application, AssetSource, Bounds, Context,
-    FontWeight, PromptLevel, Render, Result, SharedString, TitlebarOptions, Window, WindowBounds,
-    WindowOptions,
+    FontWeight, PromptLevel, Render, Result, SharedString, Subscription, TitlebarOptions,
+    Window, WindowBounds, WindowOptions,
 };
 
 mod button;
@@ -78,9 +78,35 @@ struct HelloWorld {
     auth: AuthState,
     selected_repo: Option<Arc<str>>,
     refreshing: bool,
+    _activation_subscription: Option<Subscription>,
 }
 
 impl HelloWorld {
+    fn new(
+        auth: AuthState,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) -> Self {
+        let mut view = Self {
+            auth,
+            selected_repo: Some("all".into()),
+            refreshing: false,
+            _activation_subscription: None,
+        };
+        view._activation_subscription = Some(cx.observe_window_activation(
+            window,
+            |this, window, cx| {
+                if window.is_window_active() && matches!(this.auth, AuthState::LoggedIn { .. }) {
+                    this.load_prs(cx);
+                }
+            },
+        ));
+        if matches!(view.auth, AuthState::LoggedIn { .. }) {
+            view.load_prs(cx);
+        }
+        view
+    }
+
     fn load_prs(&mut self, cx: &mut Context<Self>) {
         self.refreshing = true;
         let host = code_host();
@@ -445,7 +471,7 @@ fn main() {
                 }),
                 ..Default::default()
             },
-            |_window, cx| {
+            |window, cx| {
                 let auth = if code_host().has_saved_session() {
                     let prs = match github::PrsCache::load() {
                         Some(prs) if !prs.is_empty() => PrsState::Loaded(prs),
@@ -455,17 +481,7 @@ fn main() {
                 } else {
                     AuthState::LoggedOut
                 };
-                cx.new(|cx| {
-                    let mut view = HelloWorld {
-                        auth,
-                        selected_repo: Some("all".into()),
-                        refreshing: false,
-                    };
-                    if matches!(view.auth, AuthState::LoggedIn { .. }) {
-                        view.load_prs(cx);
-                    }
-                    view
-                })
+                cx.new(|cx| HelloWorld::new(auth, window, cx))
             },
         )
         .unwrap();
