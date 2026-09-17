@@ -216,6 +216,7 @@ fn main() {
                     size(px(800.0), px(600.0)),
                     cx,
                 ))),
+                window_min_size: Some(size(px(480.0), px(640.0))),
                 titlebar: Some(TitlebarOptions {
                     appears_transparent: true,
                     ..Default::default()
