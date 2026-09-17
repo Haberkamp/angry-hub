@@ -15,12 +15,14 @@ mod github;
 mod icon;
 mod model;
 mod pr_status;
+mod spinner;
 mod tab;
 
 use button::Button;
 use datasource::CodeHost;
 use gpui_selectable_text::SelectableText;
 use icon::{Icon, IconName};
+use spinner::Spinner;
 use tab::Tab;
 
 fn code_host() -> std::sync::Arc<dyn CodeHost> {
@@ -252,7 +254,7 @@ impl Render for HelloWorld {
                     .into_any_element(),
             ],
             AuthState::LoggedIn { prs } => match prs {
-                PrsState::Loading => vec![div().child("Loading PRs...").into_any_element()],
+                PrsState::Loading => vec![Spinner::new("prs-loading").into_any_element()],
                 PrsState::Failed(e) => vec![
                     div()
                         .text_color(rgb(0xff6666))
@@ -375,13 +377,7 @@ impl Render for HelloWorld {
                     .items_center()
                     .gap_2()
                     .when(self.refreshing, |this| {
-                        this.child(
-                            div()
-                                .id("refreshing")
-                                .text_color(rgb(0x8b949e))
-                                .text_size(px(13.0))
-                                .child("Loading..."),
-                        )
+                        this.child(div().id("refreshing").child(Spinner::new("refreshing")))
                     })
                     .child(
                         Button::new("logout", "")

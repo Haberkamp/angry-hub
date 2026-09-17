@@ -1,6 +1,4 @@
-use gpui::{
-    px, rgb, svg, App, Hsla, IntoElement, Pixels, RenderOnce, Styled, Window,
-};
+use gpui::{px, rgb, svg, App, Hsla, IntoElement, Pixels, RenderOnce, Styled, Window};
 
 #[derive(Clone, Copy)]
 pub enum IconName {
@@ -60,5 +58,6 @@ impl RenderOnce for Icon {
             .size(size)
             .flex_none()
             .text_color(color)
+            .into_any_element()
     }
 }
