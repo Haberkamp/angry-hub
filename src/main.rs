@@ -1,6 +1,6 @@
 use gpui::{
-    div, prelude::*, px, rgb, size, App, Application, Bounds, Context, Render, TitlebarOptions,
-    Window, WindowBounds, WindowOptions,
+    div, prelude::*, px, rgb, size, App, Application, Bounds, Context, PromptLevel, Render,
+    TitlebarOptions, Window, WindowBounds, WindowOptions,
 };
 use std::sync::Arc;
 
@@ -66,10 +66,25 @@ impl HelloWorld {
         .detach();
     }
 
-    fn logout(&mut self, cx: &mut Context<Self>) {
-        github::logout();
-        self.auth = AuthState::LoggedOut;
-        cx.notify();
+    fn logout(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        let answer = window.prompt(
+            PromptLevel::Warning,
+            "Are you sure you want to log out?",
+            None,
+            &["Logout", "Cancel"],
+            cx,
+        );
+        cx.spawn(async move |this, cx| {
+            if answer.await == Ok(0) {
+                this.update(cx, |this, cx| {
+                    github::logout();
+                    this.auth = AuthState::LoggedOut;
+                    cx.notify();
+                })
+                .ok();
+            }
+        })
+        .detach();
     }
 }
 
@@ -123,7 +138,7 @@ impl Render for HelloWorld {
                     .into_any_element(),
                 div().child(format!("Visit: {}", verification_uri)).into_any_element(),
             ],
-            AuthState::LoggedIn => vec![button("Logout", cx, |s, _, cx| s.logout(cx)).into_any_element()],
+            AuthState::LoggedIn => vec![button("Logout", cx, |s, window, cx| s.logout(window, cx)).into_any_element()],
         };
 
         div()
