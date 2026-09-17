@@ -4,7 +4,10 @@ use gpui::{
 };
 use std::sync::Arc;
 
+mod button;
 mod github;
+
+use button::Button;
 
 #[derive(Clone)]
 enum AuthState {
@@ -88,42 +91,32 @@ impl HelloWorld {
     }
 }
 
-fn button(
-    text: &str,
-    cx: &Context<HelloWorld>,
-    on_click: impl Fn(&mut HelloWorld, &mut Window, &mut Context<HelloWorld>) + 'static,
-) -> impl IntoElement {
-    div()
-        .id(gpui::SharedString::from(text.to_string()))
-        .px_4()
-        .py_2()
-        .bg(rgb(0x2d2d2d))
-        .hover(|this| this.bg(rgb(0x3d3d3d)))
-        .active(|this| this.bg(rgb(0x444444)))
-        .border_1()
-        .border_color(rgb(0x555555))
-        .rounded_md()
-        .cursor_pointer()
-        .text_color(rgb(0xffffff))
-        .child(text.to_string())
-        .on_click(cx.listener(move |state, _, window, cx| {
-            on_click(state, window, cx)
-        }))
-}
-
 impl Render for HelloWorld {
     fn render(&mut self, _window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let content = match &self.auth {
             AuthState::LoggedOut => {
-                vec![div()
-                    .child("Not logged in")
-                    .into_any_element(), button("Log in with GitHub", cx, |s, _, cx| s.start_login(cx)).into_any_element()]
+                vec![
+                    div().child("Not logged in").into_any_element(),
+                    Button::new("login", "Log in with GitHub")
+                        .on_click(cx.listener(|state, _, _, cx| state.start_login(cx)))
+                        .into_any_element(),
+                ]
             }
             AuthState::RequestingCode { error } => {
-                let mut children = vec![div().child("Requesting device code...").into_any_element()];
+                let mut children =
+                    vec![div().child("Requesting device code...").into_any_element()];
                 if let Some(e) = error {
-                    children.push(div().text_color(rgb(0xff6666)).child(e.to_string()).into_any_element());
-                    children.push(button("Retry", cx, |s, _, cx| s.start_login(cx)).into_any_element());
+                    children.push(
+                        div()
+                            .text_color(rgb(0xff6666))
+                            .child(e.to_string())
+                            .into_any_element(),
+                    );
+                    children.push(
+                        Button::new("retry", "Retry")
+                            .on_click(cx.listener(|state, _, _, cx| state.start_login(cx)))
+                            .into_any_element(),
+                    );
                 }
                 children
             }
@@ -138,7 +131,11 @@ impl Render for HelloWorld {
                     .into_any_element(),
                 div().child(format!("Visit: {}", verification_uri)).into_any_element(),
             ],
-            AuthState::LoggedIn => vec![button("Logout", cx, |s, window, cx| s.logout(window, cx)).into_any_element()],
+            AuthState::LoggedIn => vec![
+                Button::new("logout", "Logout")
+                    .on_click(cx.listener(|state, _, window, cx| state.logout(window, cx)))
+                    .into_any_element(),
+            ],
         };
 
         div()
