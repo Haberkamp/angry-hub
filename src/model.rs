@@ -50,6 +50,8 @@ impl CiStatus {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct PullRequest {
+    #[serde(default)]
+    pub id: String,
     pub title: String,
     pub repo: String,
     #[serde(default)]

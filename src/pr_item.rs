@@ -1,19 +1,32 @@
+use crate::context_menu::{ContextMenu, ContextMenuItem};
 use crate::model::{CiStatus, PrStatus, PullRequest};
 use crate::pr_status::{CiStatusIcon, PrStatusIcon};
 use gpui::{
-    App, ElementId, InteractiveElement, IntoElement, ParentElement, RenderOnce, SharedString,
-    Styled, Window, div, prelude::*, px, rgb,
+    App, ClickEvent, ElementId, InteractiveElement, IntoElement, MouseDownEvent, ParentElement,
+    RenderOnce, SharedString, Styled, Window, div, prelude::*, px, rgb,
 };
+
+type ToggleMenuHandler = Box<dyn Fn(&ClickEvent, &mut Window, &mut App) + 'static>;
+type DismissMenuHandler = Box<dyn Fn(&MouseDownEvent, &mut Window, &mut App) + 'static>;
+type ClosePrHandler = Box<dyn Fn(&mut Window, &mut App) + 'static>;
 
 #[derive(IntoElement)]
 pub struct PrItem {
     id: ElementId,
+    open_id: SharedString,
+    menu_id: SharedString,
+    group: SharedString,
     title: SharedString,
     repo: SharedString,
     number: SharedString,
     url: SharedString,
     status: PrStatus,
     ci: CiStatus,
+    menu_open: bool,
+    closing: bool,
+    on_toggle_menu: Option<ToggleMenuHandler>,
+    on_dismiss_menu: Option<DismissMenuHandler>,
+    on_close_pr: Option<ClosePrHandler>,
 }
 
 fn pr_number_label(pr: &PullRequest) -> String {
@@ -33,56 +46,128 @@ impl PrItem {
     pub fn new(ix: usize, pr: &PullRequest) -> Self {
         Self {
             id: ElementId::from(("pr", ix)),
+            open_id: SharedString::from(format!("pr-open-{ix}")),
+            menu_id: SharedString::from(format!("pr-menu-{ix}")),
+            group: SharedString::from(format!("pr-row-{ix}")),
             title: pr.title.clone().into(),
             repo: pr.repo.clone().into(),
             number: pr_number_label(pr).into(),
             url: pr.url.clone().into(),
             status: pr.status().clone(),
             ci: pr.ci,
+            menu_open: false,
+            closing: false,
+            on_toggle_menu: None,
+            on_dismiss_menu: None,
+            on_close_pr: None,
         }
+    }
+
+    pub fn menu_open(mut self, open: bool) -> Self {
+        self.menu_open = open;
+        self
+    }
+
+    pub fn closing(mut self, closing: bool) -> Self {
+        self.closing = closing;
+        self
+    }
+
+    pub fn on_toggle_menu(
+        mut self,
+        listener: impl Fn(&ClickEvent, &mut Window, &mut App) + 'static,
+    ) -> Self {
+        self.on_toggle_menu = Some(Box::new(listener));
+        self
+    }
+
+    pub fn on_dismiss_menu(
+        mut self,
+        listener: impl Fn(&MouseDownEvent, &mut Window, &mut App) + 'static,
+    ) -> Self {
+        self.on_dismiss_menu = Some(Box::new(listener));
+        self
+    }
+
+    pub fn on_close_pr(mut self, listener: impl Fn(&mut Window, &mut App) + 'static) -> Self {
+        self.on_close_pr = Some(Box::new(listener));
+        self
     }
 }
 
 impl RenderOnce for PrItem {
     fn render(self, _window: &mut Window, _cx: &mut App) -> impl IntoElement {
         let url = self.url.clone();
+        let menu_id = self.menu_id;
+
+        let mut menu = ContextMenu::new(menu_id)
+            .open(self.menu_open)
+            .hover_group(self.group.clone())
+            .items(vec![
+                ContextMenuItem::new("close", "Close pull request").loading(self.closing),
+            ]);
+        if let Some(on_toggle_menu) = self.on_toggle_menu {
+            menu = menu.on_toggle_open(on_toggle_menu);
+        }
+        if let Some(on_dismiss_menu) = self.on_dismiss_menu {
+            menu = menu.on_dismiss(on_dismiss_menu);
+        }
+        if let Some(on_close_pr) = self.on_close_pr {
+            menu = menu.on_select(move |item_id, window, cx| {
+                if item_id == "close" {
+                    on_close_pr(window, cx);
+                }
+            });
+        }
+
         div()
             .id(self.id)
+            .group(self.group)
             .flex()
-            .flex_col()
-            .gap_1()
+            .items_center()
+            .gap_2()
             .py_2()
             .px_3()
             .rounded_md()
             .hover(|this| this.bg(rgb(0x2a2a2a)))
-            .cursor_pointer()
-            .on_click(move |_, _window, cx| cx.open_url(&url))
             .child(
                 div()
+                    .flex_1()
                     .flex()
-                    .gap_2()
-                    .items_center()
-                    .child(PrStatusIcon::new(self.status.clone()))
-                    .child(div().child(self.title)),
-            )
-            .child(
-                div()
-                    .flex()
-                    .gap_2()
-                    .items_center()
-                    .ml(px(28.0))
-                    .text_size(px(12.0))
-                    .text_color(rgb(0x8b949e))
+                    .flex_col()
+                    .gap_1()
+                    .min_w_0()
+                    .id(self.open_id)
+                    .cursor_pointer()
+                    .on_click(move |_, _window, cx| cx.open_url(&url))
                     .child(
                         div()
                             .flex()
+                            .gap_2()
                             .items_center()
-                            .gap(px(4.0))
-                            .child(self.repo)
-                            .child("·")
-                            .child(self.number),
+                            .child(PrStatusIcon::new(self.status.clone()))
+                            .child(div().child(self.title)),
                     )
-                    .child(CiStatusIcon::new(self.ci)),
+                    .child(
+                        div()
+                            .flex()
+                            .gap_2()
+                            .items_center()
+                            .ml(px(28.0))
+                            .text_size(px(12.0))
+                            .text_color(rgb(0x8b949e))
+                            .child(
+                                div()
+                                    .flex()
+                                    .items_center()
+                                    .gap(px(4.0))
+                                    .child(self.repo)
+                                    .child("·")
+                                    .child(self.number),
+                            )
+                            .child(CiStatusIcon::new(self.ci)),
+                    ),
             )
+            .child(menu)
     }
 }

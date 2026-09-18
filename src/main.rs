@@ -13,6 +13,7 @@ use gpui::{
 
 mod avatar;
 mod button;
+mod context_menu;
 mod datasource;
 mod github;
 mod http;
@@ -152,6 +153,8 @@ struct HelloWorld {
     selected_repo: Option<Arc<str>>,
     visible_tab_repos: Option<HashSet<String>>,
     visibility_menu_open: bool,
+    pr_menu_open: Option<String>,
+    closing_pr: Option<String>,
     refreshing: bool,
     loading: bool,
     resize_generation: u64,
@@ -170,6 +173,8 @@ impl HelloWorld {
             selected_repo: Some("all".into()),
             visible_tab_repos: Prefs::load_visible_tab_repos(),
             visibility_menu_open: false,
+            pr_menu_open: None,
+            closing_pr: None,
             refreshing: false,
             loading: false,
             resize_generation: 0,
@@ -310,6 +315,8 @@ impl HelloWorld {
             self.view = view;
         }
         self.visibility_menu_open = false;
+        self.pr_menu_open = None;
+        self.closing_pr = None;
         cx.notify();
     }
 
@@ -436,6 +443,110 @@ impl HelloWorld {
         cx.notify();
     }
 
+    fn prompt_close_on_github(&mut self, url: String, window: &mut Window, cx: &mut Context<Self>) {
+        let answer = window.prompt(
+            PromptLevel::Warning,
+            "This organization restricts OAuth apps, so Angry Hub can't close the pull request.",
+            Some("Open it on GitHub and close it in the browser?"),
+            &["Open on GitHub", "Cancel"],
+            cx,
+        );
+        cx.spawn(async move |this, cx| {
+            if answer.await == Ok(0) {
+                this.update(cx, |_, cx| cx.open_url(&url)).ok();
+            }
+        })
+        .detach();
+    }
+
+    fn finish_close_pr(&mut self, cx: &mut Context<Self>) {
+        self.closing_pr = None;
+        self.pr_menu_open = None;
+        cx.notify();
+    }
+
+    fn close_pr(
+        &mut self,
+        id: String,
+        url: String,
+        repo: String,
+        menu_key: String,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        if self.closing_pr.is_some() {
+            return;
+        }
+        self.pr_menu_open = Some(menu_key.clone());
+        self.closing_pr = Some(menu_key);
+        cx.notify();
+        if id.is_empty() {
+            self.finish_close_pr(cx);
+            self.prompt_close_on_github(url, window, cx);
+            return;
+        }
+
+        let host = code_host();
+        cx.spawn_in(window, async move |this, cx| {
+            let probe_host = host.clone();
+            let repo_for_probe = repo.clone();
+            let restricted = cx
+                .background_executor()
+                .spawn(async move {
+                    probe_host
+                        .oauth_app_restricted_from_repo(&repo_for_probe)
+                        .unwrap_or(false)
+                })
+                .await;
+
+            if restricted {
+                this.update_in(cx, |this, window, cx| {
+                    this.finish_close_pr(cx);
+                    this.prompt_close_on_github(url, window, cx);
+                })
+                .ok();
+                return;
+            }
+
+            let close_host = host.clone();
+            let close_id = id.clone();
+            let result = cx
+                .background_executor()
+                .spawn(async move { close_host.close_pull_request(&close_id) })
+                .await;
+            match result {
+                Ok(()) => {
+                    this.update(cx, |this, cx| {
+                        if let AuthState::LoggedIn {
+                            prs: PrsState::Loaded(prs),
+                        } = &mut this.auth
+                        {
+                            prs.retain(|pr| pr.id != id);
+                        }
+                        this.finish_close_pr(cx);
+                    })
+                    .ok();
+                }
+                Err(e) if e.is_oauth_app_restricted() => {
+                    this.update_in(cx, |this, window, cx| {
+                        this.finish_close_pr(cx);
+                        this.prompt_close_on_github(url, window, cx);
+                    })
+                    .ok();
+                }
+                Err(e) => {
+                    eprintln!("failed to close pull request: {e}");
+                    this.update(cx, |this, cx| {
+                        this.finish_close_pr(cx);
+                        this.fetch_prs(cx);
+                    })
+                    .ok();
+                }
+            }
+        })
+        .detach();
+    }
+
     fn logout(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         let answer = window.prompt(
             PromptLevel::Warning,
@@ -453,6 +564,8 @@ impl HelloWorld {
                     this.view = AppView::PullRequests;
                     this.previous_view = AppView::PullRequests;
                     this.activity = ActivityState::Loading;
+                    this.pr_menu_open = None;
+                    this.closing_pr = None;
                     cx.notify();
                 })
                 .ok();
@@ -652,6 +765,7 @@ impl Render for HelloWorld {
                                     )
                                     .on_toggle_open(cx.listener(|state, _, _, cx| {
                                         state.visibility_menu_open = !state.visibility_menu_open;
+                                        state.pr_menu_open = None;
                                         cx.notify();
                                     }))
                                     .on_dismiss(cx.listener(|state, _, _, cx| {
@@ -700,7 +814,60 @@ impl Render for HelloWorld {
                             visible
                                 .iter()
                                 .enumerate()
-                                .map(|(ix, pr)| PrItem::new(ix, pr).into_any_element())
+                                .map(|(ix, pr)| {
+                                    let menu_key = if pr.id.is_empty() {
+                                        pr.url.clone()
+                                    } else {
+                                        pr.id.clone()
+                                    };
+                                    let close_id = pr.id.clone();
+                                    PrItem::new(ix, pr)
+                                        .menu_open(self.pr_menu_open.as_deref() == Some(&menu_key))
+                                        .closing(self.closing_pr.as_deref() == Some(&menu_key))
+                                        .on_toggle_menu(cx.listener({
+                                            let menu_key = menu_key.clone();
+                                            move |state, _, _, cx| {
+                                                if state.closing_pr.is_some() {
+                                                    return;
+                                                }
+                                                if state.pr_menu_open.as_deref() == Some(&menu_key)
+                                                {
+                                                    state.pr_menu_open = None;
+                                                } else {
+                                                    state.pr_menu_open = Some(menu_key.clone());
+                                                    state.visibility_menu_open = false;
+                                                }
+                                                cx.notify();
+                                            }
+                                        }))
+                                        .on_dismiss_menu(cx.listener(|state, _, _, cx| {
+                                            if state.closing_pr.is_some() {
+                                                return;
+                                            }
+                                            state.pr_menu_open = None;
+                                            cx.notify();
+                                        }))
+                                        .on_close_pr({
+                                            let close_id = close_id.clone();
+                                            let url = pr.url.clone();
+                                            let repo = pr.repo.clone();
+                                            let menu_key = menu_key.clone();
+                                            let entity = cx.entity();
+                                            move |window, app| {
+                                                entity.update(app, |state, cx| {
+                                                    state.close_pr(
+                                                        close_id.clone(),
+                                                        url.clone(),
+                                                        repo.clone(),
+                                                        menu_key.clone(),
+                                                        window,
+                                                        cx,
+                                                    );
+                                                });
+                                            }
+                                        })
+                                        .into_any_element()
+                                })
                                 .collect()
                         }
                     }

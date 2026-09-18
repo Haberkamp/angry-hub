@@ -7,55 +7,59 @@ use gpui::{
 };
 
 use crate::icon::{Icon, IconName};
+use crate::spinner::Spinner;
 
 fn h(c: u32) -> Hsla {
     rgb(c).into()
 }
 
 #[derive(Clone)]
-pub struct SelectOption {
+pub struct ContextMenuItem {
     pub id: SharedString,
     pub label: SharedString,
-    pub selected: bool,
+    pub loading: bool,
 }
 
-impl SelectOption {
-    pub fn new(
-        id: impl Into<SharedString>,
-        label: impl Into<SharedString>,
-        selected: bool,
-    ) -> Self {
+impl ContextMenuItem {
+    pub fn new(id: impl Into<SharedString>, label: impl Into<SharedString>) -> Self {
         Self {
             id: id.into(),
             label: label.into(),
-            selected,
+            loading: false,
         }
+    }
+
+    pub fn loading(mut self, loading: bool) -> Self {
+        self.loading = loading;
+        self
     }
 }
 
 type ToggleOpenHandler = Box<dyn Fn(&ClickEvent, &mut Window, &mut App) + 'static>;
 type DismissHandler = Box<dyn Fn(&MouseDownEvent, &mut Window, &mut App) + 'static>;
-type ToggleOptionHandler = Arc<dyn Fn(&str, &mut Window, &mut App) + 'static>;
+type SelectHandler = Arc<dyn Fn(&str, &mut Window, &mut App) + 'static>;
 
 #[derive(IntoElement)]
-pub struct MultiSelect {
+pub struct ContextMenu {
     id: SharedString,
     open: bool,
-    options: Vec<SelectOption>,
+    hover_group: Option<SharedString>,
+    items: Vec<ContextMenuItem>,
     on_toggle_open: Option<ToggleOpenHandler>,
     on_dismiss: Option<DismissHandler>,
-    on_toggle_option: Option<ToggleOptionHandler>,
+    on_select: Option<SelectHandler>,
 }
 
-impl MultiSelect {
+impl ContextMenu {
     pub fn new(id: impl Into<SharedString>) -> Self {
         Self {
             id: id.into(),
             open: false,
-            options: Vec::new(),
+            hover_group: None,
+            items: Vec::new(),
             on_toggle_open: None,
             on_dismiss: None,
-            on_toggle_option: None,
+            on_select: None,
         }
     }
 
@@ -64,8 +68,13 @@ impl MultiSelect {
         self
     }
 
-    pub fn options(mut self, options: Vec<SelectOption>) -> Self {
-        self.options = options;
+    pub fn hover_group(mut self, group: impl Into<SharedString>) -> Self {
+        self.hover_group = Some(group.into());
+        self
+    }
+
+    pub fn items(mut self, items: Vec<ContextMenuItem>) -> Self {
+        self.items = items;
         self
     }
 
@@ -85,21 +94,20 @@ impl MultiSelect {
         self
     }
 
-    pub fn on_toggle_option(
-        mut self,
-        listener: impl Fn(&str, &mut Window, &mut App) + 'static,
-    ) -> Self {
-        self.on_toggle_option = Some(Arc::new(listener));
+    pub fn on_select(mut self, listener: impl Fn(&str, &mut Window, &mut App) + 'static) -> Self {
+        self.on_select = Some(Arc::new(listener));
         self
     }
 }
 
-impl RenderOnce for MultiSelect {
+impl RenderOnce for ContextMenu {
     fn render(self, window: &mut Window, _cx: &mut App) -> impl IntoElement {
         let open = self.open;
         let trigger_bg = if open { h(0x3d3d3d) } else { h(0x2a2a2a) };
-        let on_toggle_option = self.on_toggle_option;
+        let on_select = self.on_select;
         let viewport = window.viewport_size();
+        let dismiss_id = SharedString::from(format!("{}-dismiss", self.id));
+        let menu_id = SharedString::from(format!("{}-menu", self.id));
 
         let mut trigger = div()
             .id(SharedString::from(format!("{}-trigger", self.id)))
@@ -112,8 +120,16 @@ impl RenderOnce for MultiSelect {
             .hover(|this| this.bg(h(0x3d3d3d)))
             .rounded_full()
             .cursor_pointer()
+            .when(!open, |this| {
+                let this = this.opacity(0.0);
+                if let Some(group) = self.hover_group.clone() {
+                    this.group_hover(group, |style| style.opacity(1.0))
+                } else {
+                    this
+                }
+            })
             .child(
-                Icon::new(IconName::ChevronDown)
+                Icon::new(IconName::Ellipsis)
                     .size(px(14.0))
                     .color(h(0xaaaaaa)),
             );
@@ -130,7 +146,7 @@ impl RenderOnce for MultiSelect {
             .child(trigger)
             .when(open, |this| {
                 let mut dismiss = div()
-                    .id("repo-visibility-dismiss")
+                    .id(dismiss_id)
                     .w(viewport.width)
                     .h(viewport.height)
                     .occlude();
@@ -148,14 +164,12 @@ impl RenderOnce for MultiSelect {
                 this.child(deferred(overlay).with_priority(0))
                     .child(deferred(
                         div()
-                            .id("repo-visibility-menu")
+                            .id(menu_id)
                             .absolute()
                             .top_full()
-                            .left_0()
+                            .right_0()
                             .mt_1()
                             .min_w(px(180.0))
-                            .max_h(px(280.0))
-                            .overflow_y_scroll()
                             .flex()
                             .flex_col()
                             .p_1()
@@ -165,54 +179,40 @@ impl RenderOnce for MultiSelect {
                             .rounded(px(9.0))
                             .shadow_md()
                             .occlude()
-                            .children(self.options.into_iter().map(|option| {
-                                let option_id = option.id.clone();
-                                let selected = option.selected;
+                            .children(self.items.into_iter().map(|item| {
+                                let item_id = item.id.clone();
+                                let loading = item.loading;
+                                let spinner_id = SharedString::from(format!("{}-spinner", item_id));
                                 let mut row = div()
-                                    .id(option.id)
+                                    .id(item.id)
                                     .px_3()
                                     .py_1()
                                     .rounded(px(4.0))
                                     .flex()
                                     .items_center()
-                                    .gap_2()
-                                    .cursor_pointer()
-                                    .hover(|this| this.bg(h(0x3d3d3d)))
-                                    .child(
-                                        div()
-                                            .size(px(14.0))
-                                            .flex()
-                                            .items_center()
-                                            .justify_center()
-                                            .rounded_sm()
-                                            .border_1()
-                                            .border_color(if selected {
-                                                h(0x6ea8fe)
-                                            } else {
-                                                h(0x555555)
-                                            })
-                                            .when(selected, |this| {
-                                                this.bg(h(0x3b6ea8)).child(
-                                                    Icon::new(IconName::CiCheck)
-                                                        .size(px(10.0))
-                                                        .color(h(0xffffff)),
-                                                )
-                                            }),
-                                    )
+                                    .justify_between()
+                                    .gap_3()
+                                    .when(!loading, |this| {
+                                        this.cursor_pointer().hover(|this| this.bg(h(0x3d3d3d)))
+                                    })
+                                    .when(loading, |this| this.cursor_default())
                                     .child(
                                         div()
                                             .text_size(px(13.0))
                                             .text_color(h(0xffffff))
                                             .whitespace_nowrap()
-                                            .child(option.label),
-                                    );
+                                            .child(item.label),
+                                    )
+                                    .when(loading, |this| {
+                                        this.child(Spinner::new(spinner_id).size(px(12.0)))
+                                    });
 
-                                if let Some(on_toggle_option) = on_toggle_option.clone() {
+                                if let Some(on_select) = on_select.clone()
+                                    && !loading
+                                {
                                     row = row.on_click({
-                                        let option_id = option_id.clone();
-                                        move |_, window, cx| {
-                                            on_toggle_option(option_id.as_ref(), window, cx)
-                                        }
+                                        let item_id = item_id.clone();
+                                        move |_, window, cx| on_select(item_id.as_ref(), window, cx)
                                     });
                                 }
 
