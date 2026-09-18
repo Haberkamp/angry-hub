@@ -580,6 +580,17 @@ impl Render for HelloWorld {
                                 .when(!repo_tabs.is_empty(), |this| {
                                     this.child(
                                         div()
+                                            .id("repo-tabs-title")
+                                            .pl_3()
+                                            .pb_3()
+                                            .text_2xl()
+                                            .font_weight(FontWeight::SEMIBOLD)
+                                            .child("Your Pull Requests"),
+                                    )
+                                })
+                                .when(!repo_tabs.is_empty(), |this| {
+                                    this.child(
+                                        div()
                                             .id("repo-tabs")
                                             .flex()
                                             .flex_wrap()
