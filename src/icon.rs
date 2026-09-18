@@ -11,6 +11,8 @@ pub enum IconName {
     CiX,
     CiPending,
     NoCi,
+    Comment,
+    User,
 }
 
 impl IconName {
@@ -25,6 +27,8 @@ impl IconName {
             IconName::CiX => "icons/x.svg",
             IconName::CiPending => "icons/pending.svg",
             IconName::NoCi => "icons/pending.svg",
+            IconName::Comment => "icons/comment.svg",
+            IconName::User => "icons/user.svg",
         }
     }
 }

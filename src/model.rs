@@ -64,6 +64,45 @@ impl PullRequest {
     }
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ActivityKind {
+    Merged,
+    Comment,
+    Approved,
+    ChangesRequested,
+}
+
+impl ActivityKind {
+    pub fn label(&self) -> &'static str {
+        match self {
+            ActivityKind::Merged => "merged",
+            ActivityKind::Comment => "commented",
+            ActivityKind::Approved => "approved",
+            ActivityKind::ChangesRequested => "requested changes",
+        }
+    }
+
+    pub fn color(&self) -> gpui::Hsla {
+        match self {
+            ActivityKind::Merged => gpui::rgb(0xa371f7).into(),
+            ActivityKind::Comment => gpui::rgb(0x58a6ff).into(),
+            ActivityKind::Approved => gpui::rgb(0x3fb950).into(),
+            ActivityKind::ChangesRequested => gpui::rgb(0xf85149).into(),
+        }
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct ActivityItem {
+    pub kind: ActivityKind,
+    pub actor: String,
+    pub avatar_url: Option<String>,
+    pub pr_title: String,
+    pub repo: String,
+    pub url: String,
+    pub occurred_at: String,
+}
+
 #[derive(Debug, Clone)]
 pub struct DeviceCode {
     pub device_code: String,

@@ -1,5 +1,5 @@
 use crate::icon::{Icon, IconName};
-use crate::model::{CiStatus, PrStatus};
+use crate::model::{ActivityKind, CiStatus, PrStatus};
 use gpui::{IntoElement, ParentElement, RenderOnce, Styled, Window, px};
 
 #[derive(Clone, IntoElement)]
@@ -77,5 +77,33 @@ impl RenderOnce for CiStatusIcon {
             .size(px(14.0))
             .color(self.status.color())
             .into_any_element()
+    }
+}
+
+#[derive(Clone, IntoElement)]
+pub struct ActivityKindIcon {
+    kind: ActivityKind,
+}
+
+impl ActivityKindIcon {
+    pub fn new(kind: ActivityKind) -> Self {
+        Self { kind }
+    }
+
+    fn icon(&self) -> IconName {
+        match self.kind {
+            ActivityKind::Merged => IconName::PullRequest,
+            ActivityKind::Comment => IconName::Comment,
+            ActivityKind::Approved => IconName::CiCheck,
+            ActivityKind::ChangesRequested => IconName::CiX,
+        }
+    }
+}
+
+impl RenderOnce for ActivityKindIcon {
+    fn render(self, _window: &mut Window, _cx: &mut gpui::App) -> impl IntoElement {
+        Icon::new(self.icon())
+            .size(px(20.0))
+            .color(self.kind.color())
     }
 }

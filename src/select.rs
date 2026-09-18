@@ -103,9 +103,7 @@ impl RenderOnce for MultiSelect {
 
         let mut trigger = div()
             .id(SharedString::from(format!("{}-trigger", self.id)))
-            .px_2()
-            .py_1()
-            .h(px(28.0))
+            .size(px(28.0))
             .flex()
             .flex_none()
             .items_center()
