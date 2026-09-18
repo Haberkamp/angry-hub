@@ -1,6 +1,6 @@
 use gpui::{
-    div, prelude::*, rgb, App, ClickEvent, Hsla, InteractiveElement, IntoElement, ParentElement,
-    RenderOnce, Styled, Window,
+    App, ClickEvent, Hsla, InteractiveElement, IntoElement, ParentElement, RenderOnce, Styled,
+    Window, div, prelude::*, rgb,
 };
 
 #[derive(Clone, Copy, Default, PartialEq, Eq)]
@@ -17,9 +17,7 @@ pub struct Button {
     icon: Option<crate::icon::Icon>,
     variant: ButtonVariant,
     is_loading: bool,
-    on_click: Option<
-        Box<dyn Fn(&ClickEvent, &mut Window, &mut App) + 'static>,
-    >,
+    on_click: Option<Box<dyn Fn(&ClickEvent, &mut Window, &mut App) + 'static>>,
 }
 
 struct ButtonStyle {
@@ -133,9 +131,8 @@ impl RenderOnce for Button {
 
         if let Some(on_click) = self.on_click {
             if !is_loading {
-                element = element.on_click(move |event: &ClickEvent, window, cx| {
-                    on_click(event, window, cx)
-                });
+                element = element
+                    .on_click(move |event: &ClickEvent, window, cx| on_click(event, window, cx));
             }
         }
 

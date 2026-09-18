@@ -5,9 +5,7 @@ use std::{thread, time::Duration};
 
 use serde::{Deserialize, Serialize};
 
-use crate::datasource::{
-    AuthStore, AuthSuccess, CodeHost, DataSourceError, DataSourceResult,
-};
+use crate::datasource::{AuthStore, AuthSuccess, CodeHost, DataSourceError, DataSourceResult};
 use crate::model::{CiStatus, DeviceCode, PrStatus, PullRequest};
 use std::path::PathBuf;
 
@@ -126,9 +124,7 @@ impl CodeHost for GithubApi {
             let status = resp.status();
             let body = resp
                 .text()
-                .map_err(|e| {
-                    DataSourceError::new(format!("failed to read response: {e}"))
-                })?;
+                .map_err(|e| DataSourceError::new(format!("failed to read response: {e}")))?;
             if !status.is_success() {
                 return Err(DataSourceError::new(format!(
                     "token request failed ({status}): {body}"
@@ -148,16 +144,12 @@ impl CodeHost for GithubApi {
                     // GitHub requires backing off; handled by next iteration's interval
                     continue;
                 }
-                Some("expired_token") => {
-                    return Err(DataSourceError::new("device code expired"))
-                }
-                Some("access_denied") => {
-                    return Err(DataSourceError::new("user denied access"))
-                }
+                Some("expired_token") => return Err(DataSourceError::new("device code expired")),
+                Some("access_denied") => return Err(DataSourceError::new("user denied access")),
                 Some(other) => {
                     return Err(DataSourceError::new(
                         resp.error_description.unwrap_or_else(|| other.to_string()),
-                    ))
+                    ));
                 }
                 None => return Err(DataSourceError::new("unknown error")),
             }

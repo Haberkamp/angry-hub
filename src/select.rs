@@ -1,9 +1,9 @@
 use std::sync::Arc;
 
 use gpui::{
-    anchored, deferred, div, point, prelude::*, px, rgb, AnchoredPositionMode, App, ClickEvent,
-    Corner, Hsla, InteractiveElement, IntoElement, MouseButton, MouseDownEvent, ParentElement,
-    RenderOnce, SharedString, Styled, Window,
+    AnchoredPositionMode, App, ClickEvent, Corner, Hsla, InteractiveElement, IntoElement,
+    MouseButton, MouseDownEvent, ParentElement, RenderOnce, SharedString, Styled, Window, anchored,
+    deferred, div, point, prelude::*, px, rgb,
 };
 
 use crate::icon::{Icon, IconName};
@@ -117,9 +117,8 @@ impl RenderOnce for MultiSelect {
             );
 
         if let Some(on_toggle_open) = self.on_toggle_open {
-            trigger = trigger.on_click(move |event: &ClickEvent, window, cx| {
-                on_toggle_open(event, window, cx)
-            });
+            trigger = trigger
+                .on_click(move |event: &ClickEvent, window, cx| on_toggle_open(event, window, cx));
         }
 
         div()
@@ -144,78 +143,79 @@ impl RenderOnce for MultiSelect {
                     .anchor(Corner::TopLeft)
                     .child(dismiss);
 
-                this.child(deferred(overlay).with_priority(0)).child(deferred(
-                    div()
-                        .id("repo-visibility-menu")
-                        .absolute()
-                        .top_full()
-                        .left_0()
-                        .mt_1()
-                        .min_w(px(180.0))
-                        .max_h(px(280.0))
-                        .overflow_y_scroll()
-                        .flex()
-                        .flex_col()
-                        .py_1()
-                        .bg(h(0x2a2a2a))
-                        .border_1()
-                        .border_color(h(0x444444))
-                        .rounded_md()
-                        .shadow_md()
-                        .occlude()
-                        .children(self.options.into_iter().map(|option| {
-                            let option_id = option.id.clone();
-                            let selected = option.selected;
-                            let mut row = div()
-                                .id(option.id)
-                                .px_3()
-                                .py_1()
-                                .flex()
-                                .items_center()
-                                .gap_2()
-                                .cursor_pointer()
-                                .hover(|this| this.bg(h(0x3d3d3d)))
-                                .child(
-                                    div()
-                                        .size(px(14.0))
-                                        .flex()
-                                        .items_center()
-                                        .justify_center()
-                                        .rounded_sm()
-                                        .border_1()
-                                        .border_color(if selected {
-                                            h(0x6ea8fe)
-                                        } else {
-                                            h(0x555555)
-                                        })
-                                        .when(selected, |this| {
-                                            this.bg(h(0x3b6ea8)).child(
-                                                Icon::new(IconName::CiCheck)
-                                                    .size(px(10.0))
-                                                    .color(h(0xffffff)),
-                                            )
-                                        }),
-                                )
-                                .child(
-                                    div()
-                                        .text_size(px(13.0))
-                                        .text_color(h(0xffffff))
-                                        .whitespace_nowrap()
-                                        .child(option.label),
-                                );
+                this.child(deferred(overlay).with_priority(0))
+                    .child(deferred(
+                        div()
+                            .id("repo-visibility-menu")
+                            .absolute()
+                            .top_full()
+                            .left_0()
+                            .mt_1()
+                            .min_w(px(180.0))
+                            .max_h(px(280.0))
+                            .overflow_y_scroll()
+                            .flex()
+                            .flex_col()
+                            .py_1()
+                            .bg(h(0x2a2a2a))
+                            .border_1()
+                            .border_color(h(0x444444))
+                            .rounded_md()
+                            .shadow_md()
+                            .occlude()
+                            .children(self.options.into_iter().map(|option| {
+                                let option_id = option.id.clone();
+                                let selected = option.selected;
+                                let mut row = div()
+                                    .id(option.id)
+                                    .px_3()
+                                    .py_1()
+                                    .flex()
+                                    .items_center()
+                                    .gap_2()
+                                    .cursor_pointer()
+                                    .hover(|this| this.bg(h(0x3d3d3d)))
+                                    .child(
+                                        div()
+                                            .size(px(14.0))
+                                            .flex()
+                                            .items_center()
+                                            .justify_center()
+                                            .rounded_sm()
+                                            .border_1()
+                                            .border_color(if selected {
+                                                h(0x6ea8fe)
+                                            } else {
+                                                h(0x555555)
+                                            })
+                                            .when(selected, |this| {
+                                                this.bg(h(0x3b6ea8)).child(
+                                                    Icon::new(IconName::CiCheck)
+                                                        .size(px(10.0))
+                                                        .color(h(0xffffff)),
+                                                )
+                                            }),
+                                    )
+                                    .child(
+                                        div()
+                                            .text_size(px(13.0))
+                                            .text_color(h(0xffffff))
+                                            .whitespace_nowrap()
+                                            .child(option.label),
+                                    );
 
-                            if let Some(on_toggle_option) = on_toggle_option.clone() {
-                                row = row.on_click({
-                                    let option_id = option_id.clone();
-                                    move |_, window, cx| {
-                                        on_toggle_option(option_id.as_ref(), window, cx)
-                                    }
-                                });
-                            }
+                                if let Some(on_toggle_option) = on_toggle_option.clone() {
+                                    row = row.on_click({
+                                        let option_id = option_id.clone();
+                                        move |_, window, cx| {
+                                            on_toggle_option(option_id.as_ref(), window, cx)
+                                        }
+                                    });
+                                }
 
-                            row
-                        })),
-                ))
+                                row
+                            })),
+                    ))
             })
     }
 }

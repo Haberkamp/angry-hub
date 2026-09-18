@@ -1,6 +1,6 @@
 use gpui::{
-    px, rgb, svg, Animation, AnimationExt, App, Hsla, IntoElement, Pixels, Radians,
-    RenderOnce, SharedString, Styled, Transformation, Window,
+    Animation, AnimationExt, App, Hsla, IntoElement, Pixels, Radians, RenderOnce, SharedString,
+    Styled, Transformation, Window, px, rgb, svg,
 };
 
 pub const SPINNER_PATH: &str = "icons/spinner.svg";
