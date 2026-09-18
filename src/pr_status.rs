@@ -1,6 +1,6 @@
 use crate::icon::{Icon, IconName};
 use crate::model::{ActivityKind, CiStatus, PrStatus};
-use gpui::{IntoElement, ParentElement, RenderOnce, Styled, Window, px};
+use gpui::{IntoElement, RenderOnce, Window, px};
 
 #[derive(Clone, IntoElement)]
 pub struct PrStatusIcon {
@@ -26,25 +26,6 @@ impl RenderOnce for PrStatusIcon {
     fn render(self, _window: &mut Window, _cx: &mut gpui::App) -> impl IntoElement {
         let color = self.status.color();
         Icon::new(self.icon()).size(px(20.0)).color(color)
-    }
-}
-
-#[derive(Clone, IntoElement)]
-pub struct PrStatusLabel {
-    status: PrStatus,
-}
-
-impl PrStatusLabel {
-    pub fn new(status: PrStatus) -> Self {
-        Self { status }
-    }
-}
-
-impl RenderOnce for PrStatusLabel {
-    fn render(self, _window: &mut Window, _cx: &mut gpui::App) -> impl IntoElement {
-        gpui::div()
-            .text_color(self.status.color())
-            .child(self.status.label())
     }
 }
 

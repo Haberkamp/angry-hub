@@ -126,13 +126,13 @@ impl RenderOnce for SegmentedControl {
             .items_center()
             .p(px(3.0))
             .rounded_full()
-            .bg(h(0x2a2a2a))
             .child(
                 div()
                     .relative()
                     .flex()
                     .flex_none()
                     .items_center()
+                    .gap(px(8.0))
                     .child(indicator)
                     .children(self.segments.into_iter().map(|segment| {
                         let is_selected = segment.id.as_ref() == selected.as_ref();

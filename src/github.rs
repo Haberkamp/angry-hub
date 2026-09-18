@@ -163,6 +163,7 @@ impl CodeHost for GithubApi {
                 pullRequests(first: $perPage, states: OPEN, orderBy: { field: UPDATED_AT, direction: DESC }) {
                   nodes {
                     title
+                    number
                     url
                     isDraft
                     updatedAt
@@ -210,6 +211,7 @@ impl CodeHost for GithubApi {
         #[derive(Deserialize)]
         struct PullRequestNode {
             title: String,
+            number: u32,
             url: String,
             #[serde(rename = "isDraft")]
             is_draft: bool,
@@ -280,6 +282,7 @@ impl CodeHost for GithubApi {
                 PullRequest {
                     title: node.title,
                     repo: node.repository.name_with_owner,
+                    number: node.number,
                     url: node.url,
                     status: if node.is_draft {
                         PrStatus::Draft
@@ -300,7 +303,7 @@ impl CodeHost for GithubApi {
             return Ok(Vec::new());
         }
 
-        let fields = "title url merged state repository { nameWithOwner }";
+        let fields = "title number url merged state repository { nameWithOwner }";
         let mut query = String::from("query {");
         for (i, url) in urls.iter().enumerate() {
             let escaped = url.replace('\\', "\\\\").replace('"', "\\\"");
@@ -327,6 +330,7 @@ impl CodeHost for GithubApi {
         #[derive(Deserialize)]
         struct Resource {
             title: String,
+            number: u32,
             url: String,
             merged: bool,
             repository: Repository,
@@ -380,6 +384,7 @@ impl CodeHost for GithubApi {
                 merged.push(PullRequest {
                     title: resource.title,
                     repo: resource.repository.name_with_owner,
+                    number: resource.number,
                     url: resource.url,
                     status: PrStatus::Merged,
                     ci: CiStatus::None,
