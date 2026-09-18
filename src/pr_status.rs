@@ -1,6 +1,6 @@
 use crate::icon::{Icon, IconName};
 use crate::model::{CiStatus, PrStatus};
-use gpui::{px, IntoElement, ParentElement, RenderOnce, Styled, Window};
+use gpui::{IntoElement, ParentElement, RenderOnce, Styled, Window, px};
 
 #[derive(Clone, IntoElement)]
 pub struct PrStatusIcon {

@@ -1,4 +1,4 @@
-use gpui::{px, rgb, svg, App, Hsla, IntoElement, Pixels, RenderOnce, Styled, Window};
+use gpui::{App, Hsla, IntoElement, Pixels, RenderOnce, Styled, Window, px, rgb, svg};
 
 #[derive(Clone, Copy)]
 pub enum IconName {

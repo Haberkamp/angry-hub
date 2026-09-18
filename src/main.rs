@@ -6,9 +6,9 @@ use std::sync::Arc;
 use std::time::{Duration, Instant};
 
 use gpui::{
-    div, ease_in_out, prelude::*, px, rgb, size, AnyElement, App, Application, AssetSource, Bounds,
-    Context, FontWeight, MouseDownEvent, PromptLevel, Render, Result, SharedString, Subscription,
-    Timer, TitlebarOptions, Window, WindowBounds, WindowOptions,
+    AnyElement, App, Application, AssetSource, Bounds, Context, FontWeight, MouseDownEvent,
+    PromptLevel, Render, Result, SharedString, Subscription, Timer, TitlebarOptions, Window,
+    WindowBounds, WindowOptions, div, ease_in_out, prelude::*, px, rgb, size,
 };
 
 mod button;
@@ -16,8 +16,8 @@ mod datasource;
 mod github;
 mod icon;
 mod model;
-mod prefs;
 mod pr_status;
+mod prefs;
 mod select;
 mod spinner;
 mod tab;
@@ -31,10 +31,10 @@ use select::{MultiSelect, SelectOption};
 use spinner::Spinner;
 use tab::Tab;
 
-const DEFAULT_WINDOW_SIZE: gpui::Size<gpui::Pixels> =
-    size(px(800.0), px(600.0));
+const DEFAULT_WINDOW_SIZE: gpui::Size<gpui::Pixels> = size(px(800.0), px(600.0));
 const RESTORE_ANIMATION: Duration = Duration::from_millis(250);
 
+#[cfg(target_os = "macos")]
 fn running_from_app_bundle() -> bool {
     std::env::current_exe()
         .ok()
@@ -105,7 +105,9 @@ impl AssetSource for Assets {
 #[derive(Clone)]
 enum AuthState {
     LoggedOut,
-    RequestingCode { error: Option<Arc<str>> },
+    RequestingCode {
+        error: Option<Arc<str>>,
+    },
     PendingCode {
         user_code: Arc<str>,
         verification_uri: Arc<str>,
@@ -135,11 +137,7 @@ struct HelloWorld {
 }
 
 impl HelloWorld {
-    fn new(
-        auth: AuthState,
-        window: &mut Window,
-        cx: &mut Context<Self>,
-    ) -> Self {
+    fn new(auth: AuthState, window: &mut Window, cx: &mut Context<Self>) -> Self {
         let mut view = Self {
             auth,
             selected_repo: Some("all".into()),
@@ -151,14 +149,12 @@ impl HelloWorld {
             fetch_in_flight: false,
             _activation_subscription: None,
         };
-        view._activation_subscription = Some(cx.observe_window_activation(
-            window,
-            |this, window, cx| {
+        view._activation_subscription =
+            Some(cx.observe_window_activation(window, |this, window, cx| {
                 if window.is_window_active() && matches!(this.auth, AuthState::LoggedIn { .. }) {
                     this.refresh_prs(cx);
                 }
-            },
-        ));
+            }));
         if matches!(view.auth, AuthState::LoggedIn { .. }) {
             view.loading = true;
             view.fetch_prs(cx);
@@ -192,12 +188,14 @@ impl HelloWorld {
             return;
         }
         self.fetch_in_flight = true;
-        let previous_urls: Option<HashSet<String>> =
-            if let AuthState::LoggedIn { prs: PrsState::Loaded(prs) } = &self.auth {
-                Some(prs.iter().map(|pr| pr.url.clone()).collect())
-            } else {
-                None
-            };
+        let previous_urls: Option<HashSet<String>> = if let AuthState::LoggedIn {
+            prs: PrsState::Loaded(prs),
+        } = &self.auth
+        {
+            Some(prs.iter().map(|pr| pr.url.clone()).collect())
+        } else {
+            None
+        };
         let host = code_host();
         cx.spawn(async move |this, cx| {
             let result = cx
@@ -218,7 +216,9 @@ impl HelloWorld {
                         Vec::new()
                     } else {
                         cx.background_executor()
-                            .spawn(async move { host.merged_pull_requests(&disappeared).unwrap_or_default() })
+                            .spawn(async move {
+                                host.merged_pull_requests(&disappeared).unwrap_or_default()
+                            })
                             .await
                     }
                 }
@@ -242,7 +242,7 @@ impl HelloWorld {
             for pr in merged {
                 show_desktop_notification(
                     "Pull request merged",
-                    &format!("{} · {}", pr.title, pr.repo),
+                    format!("{} · {}", pr.title, pr.repo),
                 );
             }
         })
@@ -280,8 +280,9 @@ impl HelloWorld {
                                 this.fetch_prs(cx);
                             }
                             Err(e) => {
-                                this.auth =
-                                    AuthState::RequestingCode { error: Some(e.message.into()) };
+                                this.auth = AuthState::RequestingCode {
+                                    error: Some(e.message.into()),
+                                };
                             }
                         })
                         .ok();
@@ -290,7 +291,9 @@ impl HelloWorld {
                     .detach();
                 }
                 Err(e) => {
-                    this.auth = AuthState::RequestingCode { error: Some(e.message.into()) };
+                    this.auth = AuthState::RequestingCode {
+                        error: Some(e.message.into()),
+                    };
                     cx.notify();
                 }
             })
@@ -313,8 +316,8 @@ impl HelloWorld {
 
         cx.spawn_in(window, async move |this, cx| {
             loop {
-                let t = (started.elapsed().as_secs_f32() / RESTORE_ANIMATION.as_secs_f32())
-                    .min(1.0);
+                let t =
+                    (started.elapsed().as_secs_f32() / RESTORE_ANIMATION.as_secs_f32()).min(1.0);
                 let e = ease_in_out(t);
                 let width = from.width + (to.width - from.width) * e;
                 let height = from.height + (to.height - from.height) * e;
@@ -350,9 +353,10 @@ impl HelloWorld {
         all_repos: &[Arc<str>],
         cx: &mut Context<Self>,
     ) {
-        let mut visible = self.visible_tab_repos.clone().unwrap_or_else(|| {
-            all_repos.iter().map(|repo| repo.to_string()).collect()
-        });
+        let mut visible = self
+            .visible_tab_repos
+            .clone()
+            .unwrap_or_else(|| all_repos.iter().map(|repo| repo.to_string()).collect());
         if !visible.remove(repo) {
             visible.insert(repo.to_string());
         }
@@ -399,9 +403,11 @@ impl Render for HelloWorld {
                 ]
             }
             AuthState::RequestingCode { error } => {
-                let mut children = vec![Button::new("login", "Log in with GitHub")
-                    .is_loading(true)
-                    .into_any_element()];
+                let mut children = vec![
+                    Button::new("login", "Log in with GitHub")
+                        .loading(true)
+                        .into_any_element(),
+                ];
                 if let Some(e) = error {
                     children.push(
                         div()
@@ -436,13 +442,15 @@ impl Render for HelloWorld {
                     .into_any_element(),
             ],
             AuthState::LoggedIn { prs } => match prs {
-                PrsState::Loading => vec![div()
-                    .flex()
-                    .flex_1()
-                    .items_center()
-                    .justify_center()
-                    .child(Spinner::new("prs-loading"))
-                    .into_any_element()],
+                PrsState::Loading => vec![
+                    div()
+                        .flex()
+                        .flex_1()
+                        .items_center()
+                        .justify_center()
+                        .child(Spinner::new("prs-loading"))
+                        .into_any_element(),
+                ],
                 PrsState::Failed(e) => vec![
                     div()
                         .text_color(rgb(0xff6666))
@@ -618,9 +626,7 @@ impl Render for HelloWorld {
                         Button::new("logout", "")
                             .icon(Icon::new(IconName::Logout).size(px(20.0)))
                             .tertiary()
-                            .on_click(cx.listener(|state, _, window, cx| {
-                                state.logout(window, cx)
-                            })),
+                            .on_click(cx.listener(|state, _, window, cx| state.logout(window, cx))),
                     ),
             )
         } else {
@@ -658,14 +664,18 @@ impl Render for HelloWorld {
                                 .when(
                                     matches!(
                                         self.auth,
-                                        AuthState::LoggedIn { prs: PrsState::Loading }
+                                        AuthState::LoggedIn {
+                                            prs: PrsState::Loading
+                                        }
                                     ),
                                     |this| this.flex_1(),
                                 )
                                 .when(
                                     !matches!(
                                         self.auth,
-                                        AuthState::LoggedIn { prs: PrsState::Loading }
+                                        AuthState::LoggedIn {
+                                            prs: PrsState::Loading
+                                        }
                                     ),
                                     |this| this.pt_16().pb_16(),
                                 )
@@ -715,16 +725,14 @@ impl Render for HelloWorld {
 }
 
 fn asset_base() -> PathBuf {
-    if let Ok(exe) = std::env::current_exe() {
-        if let Some(macos_dir) = exe.parent() {
-            if macos_dir.file_name().and_then(|s| s.to_str()) == Some("MacOS") {
-                if let Some(contents) = macos_dir.parent() {
-                    let bundled = contents.join("Resources").join("assets");
-                    if bundled.exists() {
-                        return bundled;
-                    }
-                }
-            }
+    if let Ok(exe) = std::env::current_exe()
+        && let Some(macos_dir) = exe.parent()
+        && macos_dir.file_name().and_then(|s| s.to_str()) == Some("MacOS")
+        && let Some(contents) = macos_dir.parent()
+    {
+        let bundled = contents.join("Resources").join("assets");
+        if bundled.exists() {
+            return bundled;
         }
     }
     PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("assets")
@@ -733,39 +741,37 @@ fn asset_base() -> PathBuf {
 fn main() {
     init_desktop_notifications();
     Application::new()
-        .with_assets(Assets {
-            base: asset_base(),
-        })
+        .with_assets(Assets { base: asset_base() })
         .run(|cx: &mut App| {
-        gpui_selectable_text::register_keyboard_bridge(cx).detach();
-        cx.open_window(
-            WindowOptions {
-                window_bounds: Some(WindowBounds::Windowed(Bounds::centered(
-                    None,
-                    DEFAULT_WINDOW_SIZE,
-                    cx,
-                ))),
-                window_min_size: Some(size(px(480.0), px(600.0))),
-                titlebar: Some(TitlebarOptions {
-                    appears_transparent: true,
+            gpui_selectable_text::register_keyboard_bridge(cx).detach();
+            cx.open_window(
+                WindowOptions {
+                    window_bounds: Some(WindowBounds::Windowed(Bounds::centered(
+                        None,
+                        DEFAULT_WINDOW_SIZE,
+                        cx,
+                    ))),
+                    window_min_size: Some(size(px(480.0), px(600.0))),
+                    titlebar: Some(TitlebarOptions {
+                        appears_transparent: true,
+                        ..Default::default()
+                    }),
                     ..Default::default()
-                }),
-                ..Default::default()
-            },
-            |window, cx| {
-                let auth = if code_host().has_saved_session() {
-                    let prs = match github::PrsCache::load() {
-                        Some(prs) if !prs.is_empty() => PrsState::Loaded(prs),
-                        _ => PrsState::Loading,
+                },
+                |window, cx| {
+                    let auth = if code_host().has_saved_session() {
+                        let prs = match github::PrsCache::load() {
+                            Some(prs) if !prs.is_empty() => PrsState::Loaded(prs),
+                            _ => PrsState::Loading,
+                        };
+                        AuthState::LoggedIn { prs }
+                    } else {
+                        AuthState::LoggedOut
                     };
-                    AuthState::LoggedIn { prs }
-                } else {
-                    AuthState::LoggedOut
-                };
-                cx.new(|cx| HelloWorld::new(auth, window, cx))
-            },
-        )
-        .unwrap();
-        cx.activate(true);
-    });
+                    cx.new(|cx| HelloWorld::new(auth, window, cx))
+                },
+            )
+            .unwrap();
+            cx.activate(true);
+        });
 }
