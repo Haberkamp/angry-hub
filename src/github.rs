@@ -623,28 +623,26 @@ impl CodeHost for GithubApi {
                     .as_ref()
                     .is_some_and(|author| author.login == me);
 
-                if !is_self {
-                    if let Some(submitted_at) = review.submitted_at.clone() {
-                        let kind = match review.state.as_str() {
-                            "APPROVED" => Some(ActivityKind::Approved),
-                            "CHANGES_REQUESTED" => Some(ActivityKind::ChangesRequested),
-                            _ => None,
-                        };
-                        if let Some(kind) = kind {
-                            items.push(ActivityItem {
-                                kind,
-                                actor: review
-                                    .author
-                                    .as_ref()
-                                    .map(Actor::display_name)
-                                    .unwrap_or_else(|| "someone".into()),
-                                avatar_url: review.author.as_ref().map(|a| a.avatar_url.clone()),
-                                pr_title: pr.title.clone(),
-                                repo: pr.repository.name_with_owner.clone(),
-                                url: review.url.clone(),
-                                occurred_at: submitted_at,
-                            });
-                        }
+                if !is_self && let Some(submitted_at) = review.submitted_at.clone() {
+                    let kind = match review.state.as_str() {
+                        "APPROVED" => Some(ActivityKind::Approved),
+                        "CHANGES_REQUESTED" => Some(ActivityKind::ChangesRequested),
+                        _ => None,
+                    };
+                    if let Some(kind) = kind {
+                        items.push(ActivityItem {
+                            kind,
+                            actor: review
+                                .author
+                                .as_ref()
+                                .map(Actor::display_name)
+                                .unwrap_or_else(|| "someone".into()),
+                            avatar_url: review.author.as_ref().map(|a| a.avatar_url.clone()),
+                            pr_title: pr.title.clone(),
+                            repo: pr.repository.name_with_owner.clone(),
+                            url: review.url.clone(),
+                            occurred_at: submitted_at,
+                        });
                     }
                 }
 

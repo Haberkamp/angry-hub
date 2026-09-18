@@ -33,7 +33,7 @@ pub struct SegmentedControl {
     id: SharedString,
     segments: Vec<Segment>,
     selected: SharedString,
-    from_selected: Option<SharedString>,
+    previous_selected: Option<SharedString>,
     on_change: Option<ChangeHandler>,
 }
 
@@ -43,7 +43,7 @@ impl SegmentedControl {
             id: id.into(),
             segments: Vec::new(),
             selected: SharedString::from(""),
-            from_selected: None,
+            previous_selected: None,
             on_change: None,
         }
     }
@@ -63,8 +63,8 @@ impl SegmentedControl {
         self
     }
 
-    pub fn from_selected(mut self, id: impl Into<SharedString>) -> Self {
-        self.from_selected = Some(id.into());
+    pub fn previous_selected(mut self, id: impl Into<SharedString>) -> Self {
+        self.previous_selected = Some(id.into());
         self
     }
 
@@ -85,7 +85,7 @@ impl RenderOnce for SegmentedControl {
             .position(|segment| segment.id.as_ref() == selected.as_ref())
             .unwrap_or(0);
         let from_ix = self
-            .from_selected
+            .previous_selected
             .as_ref()
             .and_then(|id| {
                 self.segments

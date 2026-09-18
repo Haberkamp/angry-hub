@@ -842,7 +842,7 @@ impl Render for HelloWorld {
                                                     AppView::PullRequests => "prs",
                                                     AppView::Activity => "activity",
                                                 })
-                                                .from_selected(match self.previous_view {
+                                                .previous_selected(match self.previous_view {
                                                     AppView::PullRequests => "prs",
                                                     AppView::Activity => "activity",
                                                 })

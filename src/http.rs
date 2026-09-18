@@ -3,6 +3,9 @@ use std::any::type_name;
 use futures::FutureExt;
 use gpui::http_client::{AsyncBody, HttpClient, Request, Response, Result, Url, anyhow};
 
+type HeaderPairs = Vec<(String, Vec<u8>)>;
+type HttpWorkerBody = (u16, HeaderPairs, Vec<u8>);
+
 pub struct GpuiReqwestClient {
     client: reqwest::blocking::Client,
 }
@@ -36,7 +39,7 @@ impl HttpClient for GpuiReqwestClient {
             let url = req.uri().to_string();
             let headers = req.headers().clone();
             let worker =
-                std::thread::spawn(move || -> Result<(u16, Vec<(String, Vec<u8>)>, Vec<u8>)> {
+                std::thread::spawn(move || -> Result<HttpWorkerBody> {
                     let mut builder = client.request(
                         reqwest::Method::from_bytes(method.as_str().as_bytes())
                             .map_err(|e| anyhow!(e))?,
