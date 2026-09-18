@@ -55,6 +55,7 @@ impl RenderOnce for Tab {
             .id(self.id)
             .px_3()
             .py_1()
+            .h(px(28.0))
             .flex()
             .flex_none()
             .items_center()

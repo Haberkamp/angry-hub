@@ -1,4 +1,5 @@
 use std::borrow::Cow;
+use std::collections::HashSet;
 use std::fs;
 use std::path::PathBuf;
 use std::sync::Arc;
@@ -15,7 +16,9 @@ mod datasource;
 mod github;
 mod icon;
 mod model;
+mod prefs;
 mod pr_status;
+mod select;
 mod spinner;
 mod tab;
 
@@ -23,6 +26,8 @@ use button::Button;
 use datasource::CodeHost;
 use gpui_selectable_text::SelectableText;
 use icon::{Icon, IconName};
+use prefs::Prefs;
+use select::{MultiSelect, SelectOption};
 use spinner::Spinner;
 use tab::Tab;
 
@@ -84,6 +89,8 @@ enum PrsState {
 struct HelloWorld {
     auth: AuthState,
     selected_repo: Option<Arc<str>>,
+    visible_tab_repos: Option<HashSet<String>>,
+    visibility_menu_open: bool,
     refreshing: bool,
     loading: bool,
     resize_generation: u64,
@@ -99,6 +106,8 @@ impl HelloWorld {
         let mut view = Self {
             auth,
             selected_repo: Some("all".into()),
+            visible_tab_repos: Prefs::load_visible_tab_repos(),
+            visibility_menu_open: false,
             refreshing: false,
             loading: false,
             resize_generation: 0,
@@ -235,6 +244,33 @@ impl HelloWorld {
         .detach();
     }
 
+    fn repo_tab_visible(&self, repo: &str) -> bool {
+        self.visible_tab_repos
+            .as_ref()
+            .map(|visible| visible.contains(repo))
+            .unwrap_or(true)
+    }
+
+    fn toggle_repo_tab_visibility(
+        &mut self,
+        repo: &str,
+        all_repos: &[Arc<str>],
+        cx: &mut Context<Self>,
+    ) {
+        let mut visible = self.visible_tab_repos.clone().unwrap_or_else(|| {
+            all_repos.iter().map(|repo| repo.to_string()).collect()
+        });
+        if !visible.remove(repo) {
+            visible.insert(repo.to_string());
+        }
+        if self.selected_repo.as_deref() == Some(repo) {
+            self.selected_repo = Some("all".into());
+        }
+        Prefs::save_visible_tab_repos(&visible);
+        self.visible_tab_repos = Some(visible);
+        cx.notify();
+    }
+
     fn logout(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         let answer = window.prompt(
             PromptLevel::Warning,
@@ -337,14 +373,22 @@ impl Render for HelloWorld {
                         seen
                     };
 
+                    let tab_repos: Vec<Arc<str>> = repos
+                        .iter()
+                        .filter(|repo| self.repo_tab_visible(repo))
+                        .cloned()
+                        .collect();
+
                     let selected = self
                         .selected_repo
                         .clone()
-                        .filter(|r| repos.contains(r) || r.as_ref() == "all");
+                        .filter(|r| tab_repos.contains(r) || r.as_ref() == "all")
+                        .or_else(|| Some("all".into()));
 
                     let mut visible: Vec<&model::PullRequest> = active
                         .iter()
                         .copied()
+                        .filter(|pr| self.repo_tab_visible(&pr.repo))
                         .filter(|pr| match selected.as_deref() {
                             Some("all") | None => true,
                             Some(repo) => repo == pr.repo.as_str(),
@@ -352,16 +396,50 @@ impl Render for HelloWorld {
                         .collect();
                     visible.sort_by(|a, b| b.updated_at.cmp(&a.updated_at));
 
+                    if !repos.is_empty() {
+                        repo_tabs.push(
+                            MultiSelect::new("repo-visibility")
+                                .open(self.visibility_menu_open)
+                                .options(
+                                    repos
+                                        .iter()
+                                        .map(|repo| {
+                                            SelectOption::new(
+                                                repo.to_string(),
+                                                repo.to_string(),
+                                                self.repo_tab_visible(repo),
+                                            )
+                                        })
+                                        .collect(),
+                                )
+                                .on_toggle_open(cx.listener(|state, _, _, cx| {
+                                    state.visibility_menu_open = !state.visibility_menu_open;
+                                    cx.notify();
+                                }))
+                                .on_dismiss(cx.listener(|state, _, _, cx| {
+                                    state.visibility_menu_open = false;
+                                    cx.notify();
+                                }))
+                                .on_toggle_option(cx.listener({
+                                    let repos = repos.clone();
+                                    move |state, repo: &str, _, cx| {
+                                        state.toggle_repo_tab_visibility(repo, &repos, cx);
+                                    }
+                                }))
+                                .into_any_element(),
+                        );
+                    }
                     repo_tabs.push(
                         Tab::new("repo-tab-all", "All")
                             .selected(selected.as_deref() == Some("all"))
                             .on_click(cx.listener(|state, _, _, cx| {
                                 state.selected_repo = Some("all".into());
+                                state.visibility_menu_open = false;
                                 cx.notify();
                             }))
                             .into_any_element(),
                     );
-                    repo_tabs.extend(repos.iter().enumerate().map(|(ix, repo)| {
+                    repo_tabs.extend(tab_repos.iter().enumerate().map(|(ix, repo)| {
                         Tab::new(
                             SharedString::from(format!("repo-tab-{ix}")),
                             repo.to_string(),
@@ -371,6 +449,7 @@ impl Render for HelloWorld {
                             let repo = repo.clone();
                             move |state, _, _, cx| {
                                 state.selected_repo = Some(repo.clone());
+                                state.visibility_menu_open = false;
                                 cx.notify();
                             }
                         }))
@@ -501,6 +580,7 @@ impl Render for HelloWorld {
                                             .id("repo-tabs")
                                             .flex()
                                             .flex_wrap()
+                                            .items_center()
                                             .gap_2()
                                             .pl_3()
                                             .pb_4()

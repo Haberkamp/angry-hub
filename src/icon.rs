@@ -2,6 +2,7 @@ use gpui::{px, rgb, svg, App, Hsla, IntoElement, Pixels, RenderOnce, Styled, Win
 
 #[derive(Clone, Copy)]
 pub enum IconName {
+    ChevronDown,
     Logout,
     PullRequest,
     PrClosed,
@@ -15,6 +16,7 @@ pub enum IconName {
 impl IconName {
     fn path(self) -> &'static str {
         match self {
+            IconName::ChevronDown => "icons/chevron_down.svg",
             IconName::Logout => "icons/logout.svg",
             IconName::PullRequest => "icons/pull_request.svg",
             IconName::PrClosed => "icons/pr_closed.svg",
@@ -48,7 +50,6 @@ impl Icon {
         self
     }
 
-    #[allow(dead_code)]
     pub fn color(mut self, color: impl Into<Hsla>) -> Self {
         self.color = Some(color.into());
         self
