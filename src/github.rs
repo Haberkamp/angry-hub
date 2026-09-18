@@ -303,6 +303,101 @@ impl CodeHost for GithubApi {
         Ok(prs)
     }
 
+    fn merged_pull_requests(&self, urls: &[String]) -> DataSourceResult<Vec<PullRequest>> {
+        if urls.is_empty() {
+            return Ok(Vec::new());
+        }
+
+        let fields = "title url merged state repository { nameWithOwner }";
+        let mut query = String::from("query {");
+        for (i, url) in urls.iter().enumerate() {
+            let escaped = url.replace('\\', "\\\\").replace('"', "\\\"");
+            query.push_str(&format!(
+                " r{i}: resource(url: \"{escaped}\") {{ ... on PullRequest {{ {fields} }} }}"
+            ));
+        }
+        query.push_str(" }");
+
+        #[derive(Serialize)]
+        struct Request {
+            query: String,
+        }
+        #[derive(Deserialize)]
+        struct Response {
+            data: Option<serde_json::Map<String, serde_json::Value>>,
+            message: Option<String>,
+            errors: Option<Vec<GraphQLError>>,
+        }
+        #[derive(Deserialize)]
+        struct GraphQLError {
+            message: String,
+        }
+        #[derive(Deserialize)]
+        struct Resource {
+            title: String,
+            url: String,
+            merged: bool,
+            repository: Repository,
+        }
+        #[derive(Deserialize)]
+        struct Repository {
+            #[serde(rename = "nameWithOwner")]
+            name_with_owner: String,
+        }
+
+        let token = self.bearer()?;
+        let resp = self
+            .client
+            .post("https://api.github.com/graphql")
+            .header("Accept", "application/vnd.github+json")
+            .header("Authorization", format!("Bearer {token}"))
+            .header("User-Agent", "angry-hub")
+            .json(&Request { query })
+            .send()
+            .map_err(|e| DataSourceError::new(format!("request failed: {e}")))?;
+        let status = resp.status();
+        let body = resp
+            .text()
+            .map_err(|e| DataSourceError::new(format!("failed to read response: {e}")))?;
+        if !status.is_success() {
+            return Err(DataSourceError::new(format!(
+                "graphql request failed ({status}): {body}"
+            )));
+        }
+        let resp: Response = serde_json::from_str(&body)
+            .map_err(|e| DataSourceError::new(format!("invalid response: {e}")))?;
+        if let Some(errors) = &resp.errors {
+            let messages: Vec<String> = errors.iter().map(|e| e.message.clone()).collect();
+            if resp.data.is_none() {
+                return Err(DataSourceError::new(messages.join("; ")));
+            }
+        }
+        let data = resp.data.ok_or_else(|| {
+            DataSourceError::new(resp.message.unwrap_or_else(|| "empty response".into()))
+        })?;
+
+        let mut merged = Vec::new();
+        for value in data.values() {
+            if value.is_null() {
+                continue;
+            }
+            let Ok(resource) = serde_json::from_value::<Resource>(value.clone()) else {
+                continue;
+            };
+            if resource.merged {
+                merged.push(PullRequest {
+                    title: resource.title,
+                    repo: resource.repository.name_with_owner,
+                    url: resource.url,
+                    status: PrStatus::Merged,
+                    ci: CiStatus::None,
+                    updated_at: String::new(),
+                });
+            }
+        }
+        Ok(merged)
+    }
+
     fn logout(&self) {
         self.token_store.clear();
         PrsCache::clear();

@@ -35,6 +35,42 @@ const DEFAULT_WINDOW_SIZE: gpui::Size<gpui::Pixels> =
     size(px(800.0), px(600.0));
 const RESTORE_ANIMATION: Duration = Duration::from_millis(250);
 
+fn running_from_app_bundle() -> bool {
+    std::env::current_exe()
+        .ok()
+        .and_then(|exe| exe.parent().map(|p| p.to_path_buf()))
+        .is_some_and(|macos_dir| macos_dir.file_name().and_then(|s| s.to_str()) == Some("MacOS"))
+}
+
+fn init_desktop_notifications() {
+    #[cfg(target_os = "macos")]
+    {
+        if !running_from_app_bundle() {
+            return;
+        }
+        // UNUserNotificationCenter is required on current macOS; the old
+        // NSUserNotification path can prompt for permission and still deliver nothing.
+        std::thread::spawn(|| {
+            let _ = notify_rust::request_auth_blocking();
+        });
+    }
+}
+
+fn show_desktop_notification(summary: impl Into<String>, body: impl Into<String>) {
+    let summary = summary.into();
+    let body = body.into();
+    std::thread::spawn(move || {
+        let result = notify_rust::Notification::new()
+            .summary(&summary)
+            .body(&body)
+            .sound_name("default")
+            .show();
+        if let Err(err) = result {
+            eprintln!("failed to show notification: {err}");
+        }
+    });
+}
+
 fn code_host() -> std::sync::Arc<dyn CodeHost> {
     std::sync::Arc::new(github::GithubApi::new())
 }
@@ -94,6 +130,7 @@ struct HelloWorld {
     refreshing: bool,
     loading: bool,
     resize_generation: u64,
+    fetch_in_flight: bool,
     _activation_subscription: Option<Subscription>,
 }
 
@@ -111,6 +148,7 @@ impl HelloWorld {
             refreshing: false,
             loading: false,
             resize_generation: 0,
+            fetch_in_flight: false,
             _activation_subscription: None,
         };
         view._activation_subscription = Some(cx.observe_window_activation(
@@ -125,7 +163,23 @@ impl HelloWorld {
             view.loading = true;
             view.fetch_prs(cx);
         }
+        view.poll_prs(cx);
         view
+    }
+
+    fn poll_prs(&mut self, cx: &mut Context<Self>) {
+        cx.spawn(async move |this, cx| {
+            loop {
+                Timer::after(Duration::from_secs(30)).await;
+                this.update(cx, |this, cx| {
+                    if matches!(this.auth, AuthState::LoggedIn { .. }) {
+                        this.fetch_prs(cx);
+                    }
+                })
+                .ok();
+            }
+        })
+        .detach();
     }
 
     fn refresh_prs(&mut self, cx: &mut Context<Self>) {
@@ -134,13 +188,45 @@ impl HelloWorld {
     }
 
     fn fetch_prs(&mut self, cx: &mut Context<Self>) {
+        if self.fetch_in_flight {
+            return;
+        }
+        self.fetch_in_flight = true;
+        let previous_urls: Option<HashSet<String>> =
+            if let AuthState::LoggedIn { prs: PrsState::Loaded(prs) } = &self.auth {
+                Some(prs.iter().map(|pr| pr.url.clone()).collect())
+            } else {
+                None
+            };
         let host = code_host();
         cx.spawn(async move |this, cx| {
             let result = cx
                 .background_executor()
-                .spawn(async move { host.my_pull_requests() })
+                .spawn({
+                    let host = host.clone();
+                    async move { host.my_pull_requests() }
+                })
                 .await;
+
+            let merged = match (&result, previous_urls) {
+                (Ok(current), Some(previous)) => {
+                    let disappeared: Vec<String> = previous
+                        .into_iter()
+                        .filter(|url| !current.iter().any(|pr| &pr.url == url))
+                        .collect();
+                    if disappeared.is_empty() {
+                        Vec::new()
+                    } else {
+                        cx.background_executor()
+                            .spawn(async move { host.merged_pull_requests(&disappeared).unwrap_or_default() })
+                            .await
+                    }
+                }
+                _ => Vec::new(),
+            };
+
             this.update(cx, |this, _cx| {
+                this.fetch_in_flight = false;
                 this.refreshing = false;
                 this.loading = false;
                 if let AuthState::LoggedIn { prs } = &mut this.auth {
@@ -152,6 +238,13 @@ impl HelloWorld {
             })
             .ok();
             this.update(cx, |_, cx| cx.notify()).ok();
+
+            for pr in merged {
+                show_desktop_notification(
+                    "Pull request merged",
+                    &format!("{} · {}", pr.title, pr.repo),
+                );
+            }
         })
         .detach();
     }
@@ -638,6 +731,7 @@ fn asset_base() -> PathBuf {
 }
 
 fn main() {
+    init_desktop_notifications();
     Application::new()
         .with_assets(Assets {
             base: asset_base(),

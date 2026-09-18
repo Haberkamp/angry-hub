@@ -33,6 +33,8 @@ pub trait CodeHost: Send + Sync {
 
     fn my_pull_requests(&self) -> DataSourceResult<Vec<PullRequest>>;
 
+    fn merged_pull_requests(&self, urls: &[String]) -> DataSourceResult<Vec<PullRequest>>;
+
     fn logout(&self);
 }
 
