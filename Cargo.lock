@@ -65,6 +65,7 @@ name = "angry-hub"
 version = "0.1.0"
 dependencies = [
  "dirs 5.0.1",
+ "futures",
  "gpui",
  "gpui-selectable-text",
  "notify-rust",

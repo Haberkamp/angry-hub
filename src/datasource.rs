@@ -1,4 +1,4 @@
-use crate::model::{DeviceCode, PullRequest};
+use crate::model::{ActivityItem, DeviceCode, PullRequest};
 
 pub type DataSourceResult<T> = Result<T, DataSourceError>;
 
@@ -34,6 +34,8 @@ pub trait CodeHost: Send + Sync {
     fn my_pull_requests(&self) -> DataSourceResult<Vec<PullRequest>>;
 
     fn merged_pull_requests(&self, urls: &[String]) -> DataSourceResult<Vec<PullRequest>>;
+
+    fn my_pr_activity(&self) -> DataSourceResult<Vec<ActivityItem>>;
 
     fn logout(&self);
 }

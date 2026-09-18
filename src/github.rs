@@ -6,7 +6,7 @@ use std::{thread, time::Duration};
 use serde::{Deserialize, Serialize};
 
 use crate::datasource::{AuthStore, AuthSuccess, CodeHost, DataSourceError, DataSourceResult};
-use crate::model::{CiStatus, DeviceCode, PrStatus, PullRequest};
+use crate::model::{ActivityItem, ActivityKind, CiStatus, DeviceCode, PrStatus, PullRequest};
 use std::path::PathBuf;
 
 const GITHUB_CLIENT_ID: &str = "Ov23li14mBVzqgdBi3HH";
@@ -388,6 +388,289 @@ impl CodeHost for GithubApi {
             }
         }
         Ok(merged)
+    }
+
+    fn my_pr_activity(&self) -> DataSourceResult<Vec<ActivityItem>> {
+        const QUERY: &str = r#"
+            query($perPage: Int!) {
+              viewer {
+                login
+                pullRequests(first: $perPage, states: [OPEN, MERGED, CLOSED], orderBy: { field: UPDATED_AT, direction: DESC }) {
+                  nodes {
+                    title
+                    url
+                    mergedAt
+                    mergedBy {
+                      login
+                      avatarUrl
+                      ... on User { name }
+                      ... on Organization { name }
+                      ... on Mannequin { name }
+                    }
+                    repository { nameWithOwner }
+                    comments(last: 20) {
+                      nodes {
+                        author {
+                          login
+                          avatarUrl
+                          ... on User { name }
+                          ... on Organization { name }
+                          ... on Mannequin { name }
+                        }
+                        createdAt
+                        url
+                      }
+                    }
+                    reviews(last: 20) {
+                      nodes {
+                        author {
+                          login
+                          avatarUrl
+                          ... on User { name }
+                          ... on Organization { name }
+                          ... on Mannequin { name }
+                        }
+                        state
+                        submittedAt
+                        url
+                        comments(last: 10) {
+                          nodes {
+                            author {
+                              login
+                              avatarUrl
+                              ... on User { name }
+                              ... on Organization { name }
+                              ... on Mannequin { name }
+                            }
+                            createdAt
+                            url
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+        "#;
+
+        #[derive(Serialize)]
+        struct Request {
+            query: &'static str,
+            variables: Variables,
+        }
+        #[derive(Serialize)]
+        struct Variables {
+            #[serde(rename = "perPage")]
+            per_page: u32,
+        }
+        #[derive(Deserialize)]
+        struct Response {
+            data: Option<Data>,
+            message: Option<String>,
+            errors: Option<Vec<GraphQLError>>,
+        }
+        #[derive(Deserialize)]
+        struct GraphQLError {
+            message: String,
+        }
+        #[derive(Deserialize)]
+        struct Data {
+            viewer: Viewer,
+        }
+        #[derive(Deserialize)]
+        struct Viewer {
+            login: String,
+            #[serde(rename = "pullRequests")]
+            pull_requests: PullRequestConnection,
+        }
+        #[derive(Deserialize)]
+        struct PullRequestConnection {
+            nodes: Vec<PullRequestNode>,
+        }
+        #[derive(Deserialize)]
+        struct PullRequestNode {
+            title: String,
+            url: String,
+            #[serde(rename = "mergedAt")]
+            merged_at: Option<String>,
+            #[serde(rename = "mergedBy")]
+            merged_by: Option<Actor>,
+            repository: Repository,
+            comments: CommentConnection,
+            reviews: ReviewConnection,
+        }
+        #[derive(Deserialize)]
+        struct Repository {
+            #[serde(rename = "nameWithOwner")]
+            name_with_owner: String,
+        }
+        #[derive(Deserialize)]
+        struct Actor {
+            login: String,
+            #[serde(rename = "avatarUrl")]
+            avatar_url: String,
+            name: Option<String>,
+        }
+
+        impl Actor {
+            fn display_name(&self) -> String {
+                self.name
+                    .as_deref()
+                    .map(str::trim)
+                    .filter(|name| !name.is_empty())
+                    .unwrap_or(&self.login)
+                    .to_string()
+            }
+        }
+        #[derive(Deserialize)]
+        struct CommentConnection {
+            nodes: Vec<CommentNode>,
+        }
+        #[derive(Deserialize)]
+        struct CommentNode {
+            author: Option<Actor>,
+            #[serde(rename = "createdAt")]
+            created_at: String,
+            url: String,
+        }
+        #[derive(Deserialize)]
+        struct ReviewConnection {
+            nodes: Vec<ReviewNode>,
+        }
+        #[derive(Deserialize)]
+        struct ReviewNode {
+            author: Option<Actor>,
+            state: String,
+            #[serde(rename = "submittedAt")]
+            submitted_at: Option<String>,
+            url: String,
+            comments: CommentConnection,
+        }
+
+        let token = self.bearer()?;
+        let resp = self
+            .client
+            .post("https://api.github.com/graphql")
+            .header("Accept", "application/vnd.github+json")
+            .header("Authorization", format!("Bearer {token}"))
+            .header("User-Agent", "angry-hub")
+            .json(&Request {
+                query: QUERY,
+                variables: Variables { per_page: 25 },
+            })
+            .send()
+            .map_err(|e| DataSourceError::new(format!("request failed: {e}")))?;
+        let status = resp.status();
+        let body = resp
+            .text()
+            .map_err(|e| DataSourceError::new(format!("failed to read response: {e}")))?;
+        if !status.is_success() {
+            return Err(DataSourceError::new(format!(
+                "graphql request failed ({status}): {body}"
+            )));
+        }
+        let resp: Response = serde_json::from_str(&body)
+            .map_err(|e| DataSourceError::new(format!("invalid response: {e}")))?;
+        if let Some(errors) = &resp.errors {
+            let messages: Vec<String> = errors.iter().map(|e| e.message.clone()).collect();
+            return Err(DataSourceError::new(messages.join("; ")));
+        }
+        let viewer = resp.data.map(|d| d.viewer).ok_or_else(|| {
+            DataSourceError::new(resp.message.unwrap_or_else(|| "empty response".into()))
+        })?;
+        let me = viewer.login;
+
+        let mut items = Vec::new();
+        for pr in viewer.pull_requests.nodes {
+            if let Some(merged_at) = pr.merged_at {
+                items.push(ActivityItem {
+                    kind: ActivityKind::Merged,
+                    actor: pr
+                        .merged_by
+                        .as_ref()
+                        .map(Actor::display_name)
+                        .unwrap_or_else(|| "someone".into()),
+                    avatar_url: pr.merged_by.as_ref().map(|a| a.avatar_url.clone()),
+                    pr_title: pr.title.clone(),
+                    repo: pr.repository.name_with_owner.clone(),
+                    url: pr.url.clone(),
+                    occurred_at: merged_at,
+                });
+            }
+
+            for comment in pr.comments.nodes {
+                let Some(author) = comment.author else {
+                    continue;
+                };
+                if author.login == me {
+                    continue;
+                }
+                items.push(ActivityItem {
+                    kind: ActivityKind::Comment,
+                    actor: author.display_name(),
+                    avatar_url: Some(author.avatar_url),
+                    pr_title: pr.title.clone(),
+                    repo: pr.repository.name_with_owner.clone(),
+                    url: comment.url,
+                    occurred_at: comment.created_at,
+                });
+            }
+
+            for review in pr.reviews.nodes {
+                let is_self = review
+                    .author
+                    .as_ref()
+                    .is_some_and(|author| author.login == me);
+
+                if !is_self {
+                    if let Some(submitted_at) = review.submitted_at.clone() {
+                        let kind = match review.state.as_str() {
+                            "APPROVED" => Some(ActivityKind::Approved),
+                            "CHANGES_REQUESTED" => Some(ActivityKind::ChangesRequested),
+                            _ => None,
+                        };
+                        if let Some(kind) = kind {
+                            items.push(ActivityItem {
+                                kind,
+                                actor: review
+                                    .author
+                                    .as_ref()
+                                    .map(Actor::display_name)
+                                    .unwrap_or_else(|| "someone".into()),
+                                avatar_url: review.author.as_ref().map(|a| a.avatar_url.clone()),
+                                pr_title: pr.title.clone(),
+                                repo: pr.repository.name_with_owner.clone(),
+                                url: review.url.clone(),
+                                occurred_at: submitted_at,
+                            });
+                        }
+                    }
+                }
+
+                for comment in review.comments.nodes {
+                    let Some(author) = comment.author else {
+                        continue;
+                    };
+                    if author.login == me {
+                        continue;
+                    }
+                    items.push(ActivityItem {
+                        kind: ActivityKind::Comment,
+                        actor: author.display_name(),
+                        avatar_url: Some(author.avatar_url),
+                        pr_title: pr.title.clone(),
+                        repo: pr.repository.name_with_owner.clone(),
+                        url: comment.url,
+                        occurred_at: comment.created_at,
+                    });
+                }
+            }
+        }
+
+        items.sort_by(|a, b| b.occurred_at.cmp(&a.occurred_at));
+        items.truncate(80);
+        Ok(items)
     }
 
     fn logout(&self) {
