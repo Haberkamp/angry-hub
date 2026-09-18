@@ -7,12 +7,14 @@ fn h(c: u32) -> Hsla {
     rgb(c).into()
 }
 
+type ClickHandler = Box<dyn Fn(&ClickEvent, &mut Window, &mut App) + 'static>;
+
 #[derive(IntoElement)]
 pub struct Tab {
     id: SharedString,
     label: SharedString,
     selected: bool,
-    on_click: Option<Box<dyn Fn(&ClickEvent, &mut Window, &mut App) + 'static>>,
+    on_click: Option<ClickHandler>,
 }
 
 impl Tab {

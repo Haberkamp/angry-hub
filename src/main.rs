@@ -34,6 +34,7 @@ use tab::Tab;
 const DEFAULT_WINDOW_SIZE: gpui::Size<gpui::Pixels> = size(px(800.0), px(600.0));
 const RESTORE_ANIMATION: Duration = Duration::from_millis(250);
 
+#[cfg(target_os = "macos")]
 fn running_from_app_bundle() -> bool {
     std::env::current_exe()
         .ok()
@@ -241,7 +242,7 @@ impl HelloWorld {
             for pr in merged {
                 show_desktop_notification(
                     "Pull request merged",
-                    &format!("{} · {}", pr.title, pr.repo),
+                    format!("{} · {}", pr.title, pr.repo),
                 );
             }
         })
@@ -404,7 +405,7 @@ impl Render for HelloWorld {
             AuthState::RequestingCode { error } => {
                 let mut children = vec![
                     Button::new("login", "Log in with GitHub")
-                        .is_loading(true)
+                        .loading(true)
                         .into_any_element(),
                 ];
                 if let Some(e) = error {
@@ -724,16 +725,14 @@ impl Render for HelloWorld {
 }
 
 fn asset_base() -> PathBuf {
-    if let Ok(exe) = std::env::current_exe() {
-        if let Some(macos_dir) = exe.parent() {
-            if macos_dir.file_name().and_then(|s| s.to_str()) == Some("MacOS") {
-                if let Some(contents) = macos_dir.parent() {
-                    let bundled = contents.join("Resources").join("assets");
-                    if bundled.exists() {
-                        return bundled;
-                    }
-                }
-            }
+    if let Ok(exe) = std::env::current_exe()
+        && let Some(macos_dir) = exe.parent()
+        && macos_dir.file_name().and_then(|s| s.to_str()) == Some("MacOS")
+        && let Some(contents) = macos_dir.parent()
+    {
+        let bundled = contents.join("Resources").join("assets");
+        if bundled.exists() {
+            return bundled;
         }
     }
     PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("assets")

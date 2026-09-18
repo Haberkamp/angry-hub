@@ -33,14 +33,18 @@ impl SelectOption {
     }
 }
 
+type ToggleOpenHandler = Box<dyn Fn(&ClickEvent, &mut Window, &mut App) + 'static>;
+type DismissHandler = Box<dyn Fn(&MouseDownEvent, &mut Window, &mut App) + 'static>;
+type ToggleOptionHandler = Arc<dyn Fn(&str, &mut Window, &mut App) + 'static>;
+
 #[derive(IntoElement)]
 pub struct MultiSelect {
     id: SharedString,
     open: bool,
     options: Vec<SelectOption>,
-    on_toggle_open: Option<Box<dyn Fn(&ClickEvent, &mut Window, &mut App) + 'static>>,
-    on_dismiss: Option<Box<dyn Fn(&MouseDownEvent, &mut Window, &mut App) + 'static>>,
-    on_toggle_option: Option<Arc<dyn Fn(&str, &mut Window, &mut App) + 'static>>,
+    on_toggle_open: Option<ToggleOpenHandler>,
+    on_dismiss: Option<DismissHandler>,
+    on_toggle_option: Option<ToggleOptionHandler>,
 }
 
 impl MultiSelect {
