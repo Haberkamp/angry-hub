@@ -13,6 +13,14 @@ impl DataSourceError {
             message: message.into(),
         }
     }
+
+    pub fn is_oauth_app_restricted(&self) -> bool {
+        is_oauth_app_restricted_message(&self.message)
+    }
+}
+
+pub fn is_oauth_app_restricted_message(message: &str) -> bool {
+    message.contains("OAuth App access restrictions")
 }
 
 impl std::fmt::Display for DataSourceError {
@@ -32,6 +40,10 @@ pub trait CodeHost: Send + Sync {
     fn await_login(&self, code: &DeviceCode) -> DataSourceResult<AuthSuccess>;
 
     fn my_pull_requests(&self) -> DataSourceResult<Vec<PullRequest>>;
+
+    fn close_pull_request(&self, id: &str) -> DataSourceResult<()>;
+
+    fn oauth_app_restricted_from_repo(&self, name_with_owner: &str) -> DataSourceResult<bool>;
 
     fn merged_pull_requests(&self, urls: &[String]) -> DataSourceResult<Vec<PullRequest>>;
 

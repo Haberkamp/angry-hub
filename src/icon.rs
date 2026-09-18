@@ -3,6 +3,7 @@ use gpui::{App, Hsla, IntoElement, Pixels, RenderOnce, Styled, Window, px, rgb, 
 #[derive(Clone, Copy)]
 pub enum IconName {
     ChevronDown,
+    Ellipsis,
     Logout,
     PullRequest,
     PrClosed,
@@ -19,6 +20,7 @@ impl IconName {
     fn path(self) -> &'static str {
         match self {
             IconName::ChevronDown => "icons/chevron_down.svg",
+            IconName::Ellipsis => "icons/ellipsis.svg",
             IconName::Logout => "icons/logout.svg",
             IconName::PullRequest => "icons/pull_request.svg",
             IconName::PrClosed => "icons/pr_closed.svg",

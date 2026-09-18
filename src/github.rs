@@ -35,6 +35,35 @@ impl GithubApi {
         self.token()
             .ok_or_else(|| DataSourceError::new("not logged in"))
     }
+
+    fn viewer_login(&self) -> DataSourceResult<String> {
+        #[derive(Deserialize)]
+        struct User {
+            login: String,
+        }
+
+        let token = self.bearer()?;
+        let resp = self
+            .client
+            .get("https://api.github.com/user")
+            .header("Accept", "application/vnd.github+json")
+            .header("Authorization", format!("Bearer {token}"))
+            .header("User-Agent", "angry-hub")
+            .send()
+            .map_err(|e| DataSourceError::new(format!("request failed: {e}")))?;
+        let status = resp.status();
+        let body = resp
+            .text()
+            .map_err(|e| DataSourceError::new(format!("failed to read response: {e}")))?;
+        if !status.is_success() {
+            return Err(DataSourceError::new(format!(
+                "failed to load user ({status}): {body}"
+            )));
+        }
+        let user: User = serde_json::from_str(&body)
+            .map_err(|e| DataSourceError::new(format!("invalid response: {e}")))?;
+        Ok(user.login)
+    }
 }
 
 impl Default for GithubApi {
@@ -162,6 +191,7 @@ impl CodeHost for GithubApi {
               viewer {
                 pullRequests(first: $perPage, states: OPEN, orderBy: { field: UPDATED_AT, direction: DESC }) {
                   nodes {
+                    id
                     title
                     number
                     url
@@ -210,6 +240,7 @@ impl CodeHost for GithubApi {
         }
         #[derive(Deserialize)]
         struct PullRequestNode {
+            id: String,
             title: String,
             number: u32,
             url: String,
@@ -280,6 +311,7 @@ impl CodeHost for GithubApi {
                     _ => CiStatus::None,
                 };
                 PullRequest {
+                    id: node.id,
                     title: node.title,
                     repo: node.repository.name_with_owner,
                     number: node.number,
@@ -382,6 +414,7 @@ impl CodeHost for GithubApi {
             };
             if resource.merged {
                 merged.push(PullRequest {
+                    id: String::new(),
                     title: resource.title,
                     repo: resource.repository.name_with_owner,
                     number: resource.number,
@@ -674,6 +707,115 @@ impl CodeHost for GithubApi {
         items.sort_by(|a, b| b.occurred_at.cmp(&a.occurred_at));
         items.truncate(80);
         Ok(items)
+    }
+
+    fn close_pull_request(&self, id: &str) -> DataSourceResult<()> {
+        const MUTATION: &str = r#"
+            mutation($id: ID!) {
+              closePullRequest(input: { pullRequestId: $id }) {
+                pullRequest { id state }
+              }
+            }
+        "#;
+
+        #[derive(Serialize)]
+        struct Request<'a> {
+            query: &'static str,
+            variables: Variables<'a>,
+        }
+        #[derive(Serialize)]
+        struct Variables<'a> {
+            id: &'a str,
+        }
+        #[derive(Deserialize)]
+        struct Response {
+            data: Option<serde_json::Value>,
+            message: Option<String>,
+            errors: Option<Vec<GraphQLError>>,
+        }
+        #[derive(Deserialize)]
+        struct GraphQLError {
+            message: String,
+        }
+
+        let token = self.bearer()?;
+        let resp = self
+            .client
+            .post("https://api.github.com/graphql")
+            .header("Accept", "application/vnd.github+json")
+            .header("Authorization", format!("Bearer {token}"))
+            .header("User-Agent", "angry-hub")
+            .json(&Request {
+                query: MUTATION,
+                variables: Variables { id },
+            })
+            .send()
+            .map_err(|e| DataSourceError::new(format!("request failed: {e}")))?;
+        let status = resp.status();
+        let body = resp
+            .text()
+            .map_err(|e| DataSourceError::new(format!("failed to read response: {e}")))?;
+        if !status.is_success() {
+            return Err(DataSourceError::new(format!(
+                "graphql request failed ({status}): {body}"
+            )));
+        }
+        let resp: Response = serde_json::from_str(&body)
+            .map_err(|e| DataSourceError::new(format!("invalid response: {e}")))?;
+        if let Some(errors) = &resp.errors {
+            let messages: Vec<String> = errors.iter().map(|e| e.message.clone()).collect();
+            return Err(DataSourceError::new(messages.join("; ")));
+        }
+        if resp.data.is_none() {
+            return Err(DataSourceError::new(
+                resp.message.unwrap_or_else(|| "empty response".into()),
+            ));
+        }
+        Ok(())
+    }
+
+    fn oauth_app_restricted_from_repo(&self, name_with_owner: &str) -> DataSourceResult<bool> {
+        let Some((owner, name)) = name_with_owner.split_once('/') else {
+            return Ok(false);
+        };
+        let login = self.viewer_login()?;
+        if owner.eq_ignore_ascii_case(&login) {
+            return Ok(false);
+        }
+
+        let token = self.bearer()?;
+        let url =
+            format!("https://api.github.com/repos/{owner}/{name}/collaborators/{login}/permission");
+        let resp = self
+            .client
+            .get(&url)
+            .header("Accept", "application/vnd.github+json")
+            .header("Authorization", format!("Bearer {token}"))
+            .header("User-Agent", "angry-hub")
+            .send()
+            .map_err(|e| DataSourceError::new(format!("request failed: {e}")))?;
+        let status = resp.status();
+        let body = resp
+            .text()
+            .map_err(|e| DataSourceError::new(format!("failed to read response: {e}")))?;
+        if crate::datasource::is_oauth_app_restricted_message(&body) {
+            return Ok(true);
+        }
+        if status.as_u16() == 403 {
+            #[derive(Deserialize)]
+            struct ErrorBody {
+                message: Option<String>,
+            }
+            if let Ok(error) = serde_json::from_str::<ErrorBody>(&body)
+                && error
+                    .message
+                    .as_deref()
+                    .is_some_and(crate::datasource::is_oauth_app_restricted_message)
+            {
+                return Ok(true);
+            }
+        }
+        Ok(false)
     }
 
     fn logout(&self) {
