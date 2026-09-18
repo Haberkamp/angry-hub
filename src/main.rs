@@ -610,10 +610,26 @@ impl Render for HelloWorld {
     }
 }
 
+fn asset_base() -> PathBuf {
+    if let Ok(exe) = std::env::current_exe() {
+        if let Some(macos_dir) = exe.parent() {
+            if macos_dir.file_name().and_then(|s| s.to_str()) == Some("MacOS") {
+                if let Some(contents) = macos_dir.parent() {
+                    let bundled = contents.join("Resources").join("assets");
+                    if bundled.exists() {
+                        return bundled;
+                    }
+                }
+            }
+        }
+    }
+    PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("assets")
+}
+
 fn main() {
     Application::new()
         .with_assets(Assets {
-            base: PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("assets"),
+            base: asset_base(),
         })
         .run(|cx: &mut App| {
         gpui_selectable_text::register_keyboard_bridge(cx).detach();

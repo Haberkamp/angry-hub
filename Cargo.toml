@@ -2,6 +2,21 @@
 name = "angry-hub"
 version = "0.1.0"
 edition = "2024"
+description = "A GitHub pull request dashboard."
+
+[package.metadata.bundle]
+name = "Angry Hub"
+identifier = "dev.haberkamp.angryhub"
+icon = [
+    "assets/app-icon/32x32.png",
+    "assets/app-icon/128x128.png",
+    "assets/app-icon/256x256.png",
+    "assets/app-icon/512x512.png",
+    "assets/app-icon/512x512@2x.png",
+]
+resources = ["assets"]
+category = "public.app-category.developer-tools"
+short_description = "A GitHub pull request dashboard."
 
 [dependencies]
 gpui = "*"
