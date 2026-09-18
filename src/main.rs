@@ -18,6 +18,7 @@ mod github;
 mod http;
 mod icon;
 mod model;
+mod pr_item;
 mod pr_status;
 mod prefs;
 mod segmented;
@@ -30,6 +31,7 @@ use button::Button;
 use datasource::CodeHost;
 use gpui_selectable_text::SelectableText;
 use icon::{Icon, IconName};
+use pr_item::PrItem;
 use prefs::Prefs;
 use segmented::{Segment, SegmentedControl};
 use select::{MultiSelect, SelectOption};
@@ -698,46 +700,7 @@ impl Render for HelloWorld {
                             visible
                                 .iter()
                                 .enumerate()
-                                .map(|(ix, pr)| {
-                                    let url = pr.url.clone();
-                                    div()
-                                        .id(("pr", ix))
-                                        .flex()
-                                        .flex_col()
-                                        .gap_1()
-                                        .py_2()
-                                        .px_3()
-                                        .rounded_md()
-                                        .hover(|this| this.bg(rgb(0x2a2a2a)))
-                                        .cursor_pointer()
-                                        .on_click(move |_, _window, cx| cx.open_url(&url))
-                                        .child(
-                                            div()
-                                                .flex()
-                                                .gap_2()
-                                                .items_center()
-                                                .child(pr_status::PrStatusIcon::new(
-                                                    pr.status().clone(),
-                                                ))
-                                                .child(pr_status::PrStatusLabel::new(
-                                                    pr.status().clone(),
-                                                ))
-                                                .child(
-                                                    div()
-                                                        .text_color(rgb(0x8b949e))
-                                                        .child(pr.repo.clone()),
-                                                )
-                                                .child(pr_status::CiStatusIcon::new(pr.ci)),
-                                        )
-                                        .child(
-                                            div()
-                                                .flex()
-                                                .gap_2()
-                                                .items_center()
-                                                .child(div().child(pr.title.clone())),
-                                        )
-                                })
-                                .map(|el| el.into_any_element())
+                                .map(|(ix, pr)| PrItem::new(ix, pr).into_any_element())
                                 .collect()
                         }
                     }

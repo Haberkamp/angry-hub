@@ -9,6 +9,7 @@ pub enum PrStatus {
 }
 
 impl PrStatus {
+    #[allow(dead_code)]
     pub fn label(&self) -> &'static str {
         match self {
             PrStatus::Open => "Open",
@@ -51,6 +52,8 @@ impl CiStatus {
 pub struct PullRequest {
     pub title: String,
     pub repo: String,
+    #[serde(default)]
+    pub number: u32,
     #[allow(dead_code)]
     pub url: String,
     pub status: PrStatus,
