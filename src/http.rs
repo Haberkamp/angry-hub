@@ -38,26 +38,25 @@ impl HttpClient for GpuiReqwestClient {
             let method = req.method().clone();
             let url = req.uri().to_string();
             let headers = req.headers().clone();
-            let worker =
-                std::thread::spawn(move || -> Result<HttpWorkerBody> {
-                    let mut builder = client.request(
-                        reqwest::Method::from_bytes(method.as_str().as_bytes())
-                            .map_err(|e| anyhow!(e))?,
-                        &url,
-                    );
-                    for (name, value) in headers.iter() {
-                        builder = builder.header(name.as_str(), value.as_bytes());
-                    }
-                    let resp = builder.send()?;
-                    let status = resp.status().as_u16();
-                    let resp_headers = resp
-                        .headers()
-                        .iter()
-                        .map(|(name, value)| (name.as_str().to_string(), value.as_bytes().to_vec()))
-                        .collect();
-                    let bytes = resp.bytes()?.to_vec();
-                    Ok((status, resp_headers, bytes))
-                });
+            let worker = std::thread::spawn(move || -> Result<HttpWorkerBody> {
+                let mut builder = client.request(
+                    reqwest::Method::from_bytes(method.as_str().as_bytes())
+                        .map_err(|e| anyhow!(e))?,
+                    &url,
+                );
+                for (name, value) in headers.iter() {
+                    builder = builder.header(name.as_str(), value.as_bytes());
+                }
+                let resp = builder.send()?;
+                let status = resp.status().as_u16();
+                let resp_headers = resp
+                    .headers()
+                    .iter()
+                    .map(|(name, value)| (name.as_str().to_string(), value.as_bytes().to_vec()))
+                    .collect();
+                let bytes = resp.bytes()?.to_vec();
+                Ok((status, resp_headers, bytes))
+            });
             let (status, resp_headers, bytes) = worker
                 .join()
                 .map_err(|_| anyhow!("http worker panicked"))??;
