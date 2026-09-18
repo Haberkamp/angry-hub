@@ -490,17 +490,15 @@ impl Render for HelloWorld {
                                                 div()
                                                     .text_color(rgb(0x8b949e))
                                                     .child(pr.repo.clone()),
-                                            ),
+                                            )
+                                            .child(pr_status::CiStatusIcon::new(pr.ci)),
                                     )
                                     .child(
                                         div()
                                             .flex()
                                             .gap_2()
                                             .items_center()
-                                            .child(div().child(pr.title.clone()))
-                                            .child(
-                                                pr_status::CiStatusLabel::new(pr.ci),
-                                            ),
+                                            .child(div().child(pr.title.clone())),
                                     )
                             })
                             .map(|el| el.into_any_element())
@@ -551,19 +549,12 @@ impl Render for HelloWorld {
                 this.child(
                     div()
                         .id("pr-scroll")
-                        .size_full()
                         .flex_1()
+                        .min_h_0()
                         .overflow_y_scroll()
                         .flex()
                         .flex_col()
                         .items_center()
-                        .when(
-                            !matches!(
-                                self.auth,
-                                AuthState::LoggedIn { prs: PrsState::Loading }
-                            ),
-                            |this| this.pt_16(),
-                        )
                         .child(
                             div()
                                 .id("pr-list")
@@ -571,9 +562,21 @@ impl Render for HelloWorld {
                                 .max_w(px(560.0))
                                 .flex()
                                 .flex_col()
-                                .flex_1()
+                                .when(
+                                    matches!(
+                                        self.auth,
+                                        AuthState::LoggedIn { prs: PrsState::Loading }
+                                    ),
+                                    |this| this.flex_1(),
+                                )
+                                .when(
+                                    !matches!(
+                                        self.auth,
+                                        AuthState::LoggedIn { prs: PrsState::Loading }
+                                    ),
+                                    |this| this.pt_16().pb_16(),
+                                )
                                 .px_4()
-                                .pb_4()
                                 .when(!repo_tabs.is_empty(), |this| {
                                     this.child(
                                         div()

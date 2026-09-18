@@ -49,11 +49,11 @@ impl RenderOnce for PrStatusLabel {
 }
 
 #[derive(Clone, IntoElement)]
-pub struct CiStatusLabel {
+pub struct CiStatusIcon {
     status: CiStatus,
 }
 
-impl CiStatusLabel {
+impl CiStatusIcon {
     pub fn new(status: CiStatus) -> Self {
         Self { status }
     }
@@ -68,22 +68,14 @@ impl CiStatusLabel {
     }
 }
 
-impl RenderOnce for CiStatusLabel {
+impl RenderOnce for CiStatusIcon {
     fn render(self, _window: &mut Window, _cx: &mut gpui::App) -> impl IntoElement {
         if self.status == CiStatus::None {
             return gpui::div().into_any_element();
         }
-        gpui::div()
-            .flex()
-            .items_center()
-            .gap_1()
-            .text_color(gpui::rgb(0x8b949e))
-            .child(
-                Icon::new(self.icon())
-                    .size(px(14.0))
-                    .color(self.status.color()),
-            )
-            .child(self.status.label())
+        Icon::new(self.icon())
+            .size(px(14.0))
+            .color(self.status.color())
             .into_any_element()
     }
 }

@@ -37,15 +37,6 @@ pub enum CiStatus {
 }
 
 impl CiStatus {
-    pub fn label(&self) -> &'static str {
-        match self {
-            CiStatus::Success => "CI passing",
-            CiStatus::Failure => "CI failing",
-            CiStatus::Pending => "CI running",
-            CiStatus::None => "No CI",
-        }
-    }
-
     pub fn color(&self) -> gpui::Hsla {
         match self {
             CiStatus::Success => gpui::rgb(0x3fb950).into(),
