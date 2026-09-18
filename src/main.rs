@@ -413,7 +413,16 @@ impl Render for HelloWorld {
                                                     .child(pr.repo.clone()),
                                             ),
                                     )
-                                    .child(div().child(pr.title.clone()))
+                                    .child(
+                                        div()
+                                            .flex()
+                                            .gap_2()
+                                            .items_center()
+                                            .child(div().child(pr.title.clone()))
+                                            .child(
+                                                pr_status::CiStatusLabel::new(pr.ci),
+                                            ),
+                                    )
                             })
                             .map(|el| el.into_any_element())
                             .collect()

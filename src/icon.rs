@@ -6,6 +6,10 @@ pub enum IconName {
     PullRequest,
     PrClosed,
     PrDraft,
+    CiCheck,
+    CiX,
+    CiPending,
+    NoCi,
 }
 
 impl IconName {
@@ -15,6 +19,10 @@ impl IconName {
             IconName::PullRequest => "icons/pull_request.svg",
             IconName::PrClosed => "icons/pr_closed.svg",
             IconName::PrDraft => "icons/pr_draft.svg",
+            IconName::CiCheck => "icons/check.svg",
+            IconName::CiX => "icons/x.svg",
+            IconName::CiPending => "icons/pending.svg",
+            IconName::NoCi => "icons/pending.svg",
         }
     }
 }

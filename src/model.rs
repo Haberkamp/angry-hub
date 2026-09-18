@@ -28,6 +28,34 @@ impl PrStatus {
     }
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub enum CiStatus {
+    Success,
+    Failure,
+    Pending,
+    None,
+}
+
+impl CiStatus {
+    pub fn label(&self) -> &'static str {
+        match self {
+            CiStatus::Success => "CI passing",
+            CiStatus::Failure => "CI failing",
+            CiStatus::Pending => "CI running",
+            CiStatus::None => "No CI",
+        }
+    }
+
+    pub fn color(&self) -> gpui::Hsla {
+        match self {
+            CiStatus::Success => gpui::rgb(0x3fb950).into(),
+            CiStatus::Failure => gpui::rgb(0xf85149).into(),
+            CiStatus::Pending => gpui::rgb(0xd29922).into(),
+            CiStatus::None => gpui::rgb(0x6e7681).into(),
+        }
+    }
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct PullRequest {
     pub title: String,
@@ -35,6 +63,7 @@ pub struct PullRequest {
     #[allow(dead_code)]
     pub url: String,
     pub status: PrStatus,
+    pub ci: CiStatus,
     pub updated_at: String,
 }
 

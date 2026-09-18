@@ -8,7 +8,7 @@ use serde::{Deserialize, Serialize};
 use crate::datasource::{
     AuthStore, AuthSuccess, CodeHost, DataSourceError, DataSourceResult,
 };
-use crate::model::{DeviceCode, PrStatus, PullRequest};
+use crate::model::{CiStatus, DeviceCode, PrStatus, PullRequest};
 use std::path::PathBuf;
 
 const GITHUB_CLIENT_ID: &str = "Ov23li14mBVzqgdBi3HH";
@@ -165,30 +165,89 @@ impl CodeHost for GithubApi {
     }
 
     fn my_pull_requests(&self) -> DataSourceResult<Vec<PullRequest>> {
-        #[derive(Deserialize)]
-        struct SearchResponse {
-            items: Vec<SearchItem>,
+        const QUERY: &str = r#"
+            query($perPage: Int!) {
+              viewer {
+                pullRequests(first: $perPage, states: OPEN, orderBy: { field: UPDATED_AT, direction: DESC }) {
+                  nodes {
+                    title
+                    url
+                    isDraft
+                    updatedAt
+                    repository { nameWithOwner }
+                    statusCheckRollup { state }
+                  }
+                }
+              }
+            }
+        "#;
+
+        #[derive(Serialize)]
+        struct Request {
+            query: &'static str,
+            variables: Variables,
+        }
+        #[derive(Serialize)]
+        struct Variables {
+            #[serde(rename = "perPage")]
+            per_page: u32,
         }
         #[derive(Deserialize)]
-        struct SearchItem {
+        struct Response {
+            data: Option<Data>,
+            message: Option<String>,
+            errors: Option<Vec<GraphQLError>>,
+        }
+        #[derive(Deserialize)]
+        struct GraphQLError {
+            message: String,
+        }
+        #[derive(Deserialize)]
+        struct Data {
+            viewer: Viewer,
+        }
+        #[derive(Deserialize)]
+        struct Viewer {
+            #[serde(rename = "pullRequests")]
+            pull_requests: PullRequestConnection,
+        }
+        #[derive(Deserialize)]
+        struct PullRequestConnection {
+            nodes: Vec<PullRequestNode>,
+        }
+        #[derive(Deserialize)]
+        struct PullRequestNode {
             title: String,
-            html_url: String,
-            draft: Option<bool>,
+            url: String,
+            #[serde(rename = "isDraft")]
+            is_draft: bool,
+            #[serde(rename = "updatedAt")]
             updated_at: String,
-            repository_url: String,
+            repository: Repository,
+            #[serde(rename = "statusCheckRollup")]
+            status_check_rollup: Option<StatusCheckRollup>,
+        }
+        #[derive(Deserialize)]
+        struct Repository {
+            #[serde(rename = "nameWithOwner")]
+            name_with_owner: String,
+        }
+        #[derive(Deserialize)]
+        struct StatusCheckRollup {
+            state: Option<String>,
         }
 
         let token = self.bearer()?;
         let resp = self
             .client
-            .get("https://api.github.com/search/issues")
-            .query(&[
-                ("q", "author:@me type:pr is:open"),
-                ("per_page", "100"),
-            ])
+            .post("https://api.github.com/graphql")
             .header("Accept", "application/vnd.github+json")
             .header("Authorization", format!("Bearer {token}"))
             .header("User-Agent", "angry-hub")
+            .json(&Request {
+                query: QUERY,
+                variables: Variables { per_page: 100 },
+            })
             .send()
             .map_err(|e| DataSourceError::new(format!("request failed: {e}")))?;
         let status = resp.status();
@@ -197,26 +256,46 @@ impl CodeHost for GithubApi {
             .map_err(|e| DataSourceError::new(format!("failed to read response: {e}")))?;
         if !status.is_success() {
             return Err(DataSourceError::new(format!(
-                "search request failed ({status}): {body}"
+                "graphql request failed ({status}): {body}"
             )));
         }
-        let resp: SearchResponse = serde_json::from_str(&body)
+        let resp: Response = serde_json::from_str(&body)
             .map_err(|e| DataSourceError::new(format!("invalid response: {e}")))?;
+        if let Some(errors) = &resp.errors {
+            let messages: Vec<String> = errors.iter().map(|e| e.message.clone()).collect();
+            return Err(DataSourceError::new(messages.join("; ")));
+        }
+        let nodes = resp
+            .data
+            .map(|d| d.viewer.pull_requests.nodes)
+            .ok_or_else(|| {
+                DataSourceError::new(resp.message.unwrap_or_else(|| "empty response".into()))
+            })?;
 
-        let prs: Vec<PullRequest> = resp
-            .items
+        let prs: Vec<PullRequest> = nodes
             .into_iter()
-            .map(|item| {
+            .map(|node| {
+                let ci = match node
+                    .status_check_rollup
+                    .as_ref()
+                    .and_then(|r| r.state.as_deref())
+                {
+                    Some("SUCCESS") => CiStatus::Success,
+                    Some("FAILURE") | Some("ERROR") => CiStatus::Failure,
+                    Some("PENDING") | Some("EXPECTED") => CiStatus::Pending,
+                    _ => CiStatus::None,
+                };
                 PullRequest {
-                    title: item.title,
-                    repo: repo_name_from_url(&item.repository_url),
-                    url: item.html_url,
-                    status: if item.draft.unwrap_or(false) {
+                    title: node.title,
+                    repo: node.repository.name_with_owner,
+                    url: node.url,
+                    status: if node.is_draft {
                         PrStatus::Draft
                     } else {
                         PrStatus::Open
                     },
-                    updated_at: item.updated_at,
+                    ci,
+                    updated_at: node.updated_at,
                 }
             })
             .collect();
@@ -227,15 +306,6 @@ impl CodeHost for GithubApi {
     fn logout(&self) {
         self.token_store.clear();
         PrsCache::clear();
-    }
-}
-
-fn repo_name_from_url(url: &str) -> String {
-    let url = url.trim_end_matches('/');
-    let segments: Vec<&str> = url.rsplitn(3, '/').collect();
-    match segments.as_slice() {
-        [name, owner, ..] => format!("{owner}/{name}"),
-        _ => url.to_string(),
     }
 }
 
