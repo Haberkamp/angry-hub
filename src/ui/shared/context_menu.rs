@@ -6,8 +6,8 @@ use gpui::{
     deferred, div, point, prelude::*, px, rgb,
 };
 
-use crate::icon::{Icon, IconName};
-use crate::spinner::Spinner;
+use super::icon::{Icon, IconName};
+use super::spinner::Spinner;
 
 fn h(c: u32) -> Hsla {
     rgb(c).into()
