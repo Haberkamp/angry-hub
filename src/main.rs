@@ -29,43 +29,6 @@ use ui::{
 const DEFAULT_WINDOW_SIZE: gpui::Size<gpui::Pixels> = size(px(800.0), px(600.0));
 const RESTORE_ANIMATION: Duration = Duration::from_millis(250);
 
-#[cfg(target_os = "macos")]
-fn running_from_app_bundle() -> bool {
-    std::env::current_exe()
-        .ok()
-        .and_then(|exe| exe.parent().map(|p| p.to_path_buf()))
-        .is_some_and(|macos_dir| macos_dir.file_name().and_then(|s| s.to_str()) == Some("MacOS"))
-}
-
-fn init_desktop_notifications() {
-    #[cfg(target_os = "macos")]
-    {
-        if !running_from_app_bundle() {
-            return;
-        }
-        // UNUserNotificationCenter is required on current macOS; the old
-        // NSUserNotification path can prompt for permission and still deliver nothing.
-        std::thread::spawn(|| {
-            let _ = notify_rust::request_auth_blocking();
-        });
-    }
-}
-
-fn show_desktop_notification(summary: impl Into<String>, body: impl Into<String>) {
-    let summary = summary.into();
-    let body = body.into();
-    std::thread::spawn(move || {
-        let result = notify_rust::Notification::new()
-            .summary(&summary)
-            .body(&body)
-            .sound_name("default")
-            .show();
-        if let Err(err) = result {
-            eprintln!("failed to show notification: {err}");
-        }
-    });
-}
-
 fn code_host() -> std::sync::Arc<dyn CodeHost> {
     std::sync::Arc::new(github::GithubApi::new())
 }
@@ -211,42 +174,12 @@ impl HelloWorld {
             return;
         }
         self.fetch_in_flight = true;
-        let previous_urls: Option<HashSet<String>> = if let AuthState::LoggedIn {
-            prs: PrsState::Loaded(prs),
-        } = &self.auth
-        {
-            Some(prs.iter().map(|pr| pr.url.clone()).collect())
-        } else {
-            None
-        };
         let host = code_host();
         cx.spawn(async move |this, cx| {
             let result = cx
                 .background_executor()
-                .spawn({
-                    let host = host.clone();
-                    async move { host.my_pull_requests() }
-                })
+                .spawn(async move { host.my_pull_requests() })
                 .await;
-
-            let merged = match (&result, previous_urls) {
-                (Ok(current), Some(previous)) => {
-                    let disappeared: Vec<String> = previous
-                        .into_iter()
-                        .filter(|url| !current.iter().any(|pr| &pr.url == url))
-                        .collect();
-                    if disappeared.is_empty() {
-                        Vec::new()
-                    } else {
-                        cx.background_executor()
-                            .spawn(async move {
-                                host.merged_pull_requests(&disappeared).unwrap_or_default()
-                            })
-                            .await
-                    }
-                }
-                _ => Vec::new(),
-            };
 
             this.update(cx, |this, _cx| {
                 this.fetch_in_flight = false;
@@ -261,13 +194,6 @@ impl HelloWorld {
             })
             .ok();
             this.update(cx, |_, cx| cx.notify()).ok();
-
-            for pr in merged {
-                show_desktop_notification(
-                    "Pull request merged",
-                    format!("{} · {}", pr.title, pr.repo),
-                );
-            }
         })
         .detach();
     }
@@ -1023,7 +949,6 @@ fn asset_base() -> PathBuf {
 }
 
 fn main() {
-    init_desktop_notifications();
     Application::new()
         .with_assets(Assets { base: asset_base() })
         .run(|cx: &mut App| {
