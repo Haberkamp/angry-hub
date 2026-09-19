@@ -1,4 +1,10 @@
+use std::sync::Arc;
+
 use crate::model::{ActivityItem, DeviceCode, PullRequest};
+
+pub fn code_host() -> Arc<dyn CodeHost> {
+    Arc::new(crate::github::GithubApi::new())
+}
 
 pub type DataSourceResult<T> = Result<T, DataSourceError>;
 
