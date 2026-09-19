@@ -1,9 +1,12 @@
 use std::sync::Arc;
+use std::time::{Duration, Instant};
 
 use gpui::{
-    AnchoredPositionMode, App, ClickEvent, Corner, Hsla, InteractiveElement, IntoElement,
-    MouseButton, MouseDownEvent, ParentElement, RenderOnce, SharedString, Styled, Window, anchored,
-    deferred, div, point, prelude::*, px, rgb,
+    AnchoredPositionMode, Animation, AnimationExt as _, AnyElement, App, Bounds, ClickEvent,
+    Corner, Element, ElementId, GlobalElementId, Hsla, InspectorElementId, InteractiveElement,
+    IntoElement, LayoutId, MouseButton, MouseDownEvent, ParentElement, Pixels, RenderOnce,
+    SharedString, Styled, Window, anchored, deferred, div, ease_out_quint, point, prelude::*, px,
+    rgb,
 };
 
 use super::icon::{Icon, IconName};
@@ -36,6 +39,107 @@ impl SelectOption {
 type ToggleOpenHandler = Box<dyn Fn(&ClickEvent, &mut Window, &mut App) + 'static>;
 type DismissHandler = Box<dyn Fn(&MouseDownEvent, &mut Window, &mut App) + 'static>;
 type ToggleOptionHandler = Arc<dyn Fn(&str, &mut Window, &mut App) + 'static>;
+
+const PANEL_ANIMATION: Duration = Duration::from_millis(180);
+const PANEL_REST_MARGIN: f32 = 4.0;
+const PANEL_SLIDE: f32 = 8.0;
+
+struct OpenPresence {
+    id: ElementId,
+    open: bool,
+    child: Option<AnyElement>,
+}
+
+struct OpenPresenceState {
+    shown: bool,
+    closing_since: Option<Instant>,
+}
+
+impl IntoElement for OpenPresence {
+    type Element = Self;
+
+    fn into_element(self) -> Self::Element {
+        self
+    }
+}
+
+impl Element for OpenPresence {
+    type RequestLayoutState = AnyElement;
+    type PrepaintState = ();
+
+    fn id(&self) -> Option<ElementId> {
+        Some(self.id.clone())
+    }
+
+    fn source_location(&self) -> Option<&'static core::panic::Location<'static>> {
+        None
+    }
+
+    fn request_layout(
+        &mut self,
+        global_id: Option<&GlobalElementId>,
+        _inspector_id: Option<&InspectorElementId>,
+        window: &mut Window,
+        cx: &mut App,
+    ) -> (LayoutId, Self::RequestLayoutState) {
+        window.with_element_state(global_id.unwrap(), |state, window| {
+            let mut state = state.unwrap_or(OpenPresenceState {
+                shown: false,
+                closing_since: None,
+            });
+
+            let visible = if self.open {
+                state.shown = true;
+                state.closing_since = None;
+                true
+            } else if state.shown {
+                let started = state.closing_since.get_or_insert_with(Instant::now);
+                if started.elapsed() < PANEL_ANIMATION {
+                    window.request_animation_frame();
+                    true
+                } else {
+                    state.shown = false;
+                    state.closing_since = None;
+                    false
+                }
+            } else {
+                false
+            };
+
+            let mut element = if visible {
+                self.child.take().expect("presence child")
+            } else {
+                div().into_any_element()
+            };
+            ((element.request_layout(window, cx), element), state)
+        })
+    }
+
+    fn prepaint(
+        &mut self,
+        _id: Option<&GlobalElementId>,
+        _inspector_id: Option<&InspectorElementId>,
+        _bounds: Bounds<Pixels>,
+        element: &mut Self::RequestLayoutState,
+        window: &mut Window,
+        cx: &mut App,
+    ) -> Self::PrepaintState {
+        element.prepaint(window, cx);
+    }
+
+    fn paint(
+        &mut self,
+        _id: Option<&GlobalElementId>,
+        _inspector_id: Option<&InspectorElementId>,
+        _bounds: Bounds<Pixels>,
+        element: &mut Self::RequestLayoutState,
+        _: &mut Self::PrepaintState,
+        window: &mut Window,
+        cx: &mut App,
+    ) {
+        element.paint(window, cx);
+    }
+}
 
 #[derive(IntoElement)]
 pub struct MultiSelect {
@@ -123,109 +227,126 @@ impl RenderOnce for MultiSelect {
                 .on_click(move |event: &ClickEvent, window, cx| on_toggle_open(event, window, cx));
         }
 
+        let select_id = self.id.clone();
+        let mut dismiss = div()
+            .id("repo-visibility-dismiss")
+            .w(viewport.width)
+            .h(viewport.height)
+            .occlude();
+        if let Some(on_dismiss) = self.on_dismiss {
+            dismiss = dismiss.on_mouse_down(MouseButton::Left, move |event, window, cx| {
+                on_dismiss(event, window, cx)
+            });
+        }
+        let overlay = anchored()
+            .position_mode(AnchoredPositionMode::Window)
+            .position(point(px(0.0), px(0.0)))
+            .anchor(Corner::TopLeft)
+            .child(dismiss);
+
+        let panel_id = SharedString::from(format!("{}-menu", select_id));
+        let animation_id = SharedString::from(format!(
+            "{}-{}",
+            panel_id,
+            if open { "enter" } else { "exit" }
+        ));
+        let panel = div()
+            .id(panel_id)
+            .absolute()
+            .top_full()
+            .left_0()
+            .min_w(px(180.0))
+            .max_h(px(280.0))
+            .flex()
+            .flex_col()
+            .p_1()
+            .bg(h(0x2a2a2a))
+            .border_1()
+            .border_color(h(0x444444))
+            .rounded(px(9.0))
+            .shadow_md()
+            .occlude()
+            .child(
+                div()
+                    .id("repo-visibility-menu-scroll")
+                    .max_h(px(270.0))
+                    .overflow_y_scroll()
+                    .flex()
+                    .flex_col()
+                    .children(self.options.into_iter().map(|option| {
+                        let option_id = option.id.clone();
+                        let selected = option.selected;
+                        let mut row = div()
+                            .id(option.id)
+                            .px_3()
+                            .py_1()
+                            .rounded(px(4.0))
+                            .flex()
+                            .items_center()
+                            .gap_2()
+                            .cursor_pointer()
+                            .hover(|this| this.bg(h(0x3d3d3d)))
+                            .child(
+                                div()
+                                    .size(px(14.0))
+                                    .flex()
+                                    .items_center()
+                                    .justify_center()
+                                    .rounded_sm()
+                                    .border_1()
+                                    .border_color(if selected { h(0x6ea8fe) } else { h(0x555555) })
+                                    .when(selected, |this| {
+                                        this.bg(h(0x3b6ea8)).child(
+                                            Icon::new(IconName::CiCheck)
+                                                .size(px(10.0))
+                                                .color(h(0xffffff)),
+                                        )
+                                    }),
+                            )
+                            .child(
+                                div()
+                                    .text_size(px(13.0))
+                                    .text_color(h(0xffffff))
+                                    .whitespace_nowrap()
+                                    .child(option.label),
+                            );
+
+                        if let Some(on_toggle_option) = on_toggle_option.clone() {
+                            row = row.on_click({
+                                let option_id = option_id.clone();
+                                move |_, window, cx| {
+                                    on_toggle_option(option_id.as_ref(), window, cx)
+                                }
+                            });
+                        }
+
+                        row
+                    })),
+            )
+            .with_animation(
+                animation_id,
+                Animation::new(PANEL_ANIMATION).with_easing(ease_out_quint()),
+                move |this, delta| {
+                    let t = if open { delta } else { 1.0 - delta };
+                    this.opacity(t)
+                        .mt(px(PANEL_REST_MARGIN - (1.0 - t) * PANEL_SLIDE))
+                },
+            );
+
         div()
-            .id(self.id)
+            .id(select_id.clone())
             .relative()
             .flex_none()
             .child(trigger)
-            .when(open, |this| {
-                let mut dismiss = div()
-                    .id("repo-visibility-dismiss")
-                    .w(viewport.width)
-                    .h(viewport.height)
-                    .occlude();
-                if let Some(on_dismiss) = self.on_dismiss {
-                    dismiss = dismiss.on_mouse_down(MouseButton::Left, move |event, window, cx| {
-                        on_dismiss(event, window, cx)
-                    });
-                }
-                let overlay = anchored()
-                    .position_mode(AnchoredPositionMode::Window)
-                    .position(point(px(0.0), px(0.0)))
-                    .anchor(Corner::TopLeft)
-                    .child(dismiss);
-
-                this.child(deferred(overlay).with_priority(0))
-                    .child(deferred(
-                        div()
-                            .id("repo-visibility-menu")
-                            .absolute()
-                            .top_full()
-                            .left_0()
-                            .mt_1()
-                            .min_w(px(180.0))
-                            .max_h(px(280.0))
-                            .flex()
-                            .flex_col()
-                            .p_1()
-                            .bg(h(0x2a2a2a))
-                            .border_1()
-                            .border_color(h(0x444444))
-                            .rounded(px(9.0))
-                            .shadow_md()
-                            .occlude()
-                            .child(
-                                div()
-                                    .id("repo-visibility-menu-scroll")
-                                    .max_h(px(270.0))
-                                    .overflow_y_scroll()
-                                    .flex()
-                                    .flex_col()
-                                    .children(self.options.into_iter().map(|option| {
-                                        let option_id = option.id.clone();
-                                        let selected = option.selected;
-                                        let mut row = div()
-                                            .id(option.id)
-                                            .px_3()
-                                            .py_1()
-                                            .rounded(px(4.0))
-                                            .flex()
-                                            .items_center()
-                                            .gap_2()
-                                            .cursor_pointer()
-                                            .hover(|this| this.bg(h(0x3d3d3d)))
-                                            .child(
-                                                div()
-                                                    .size(px(14.0))
-                                                    .flex()
-                                                    .items_center()
-                                                    .justify_center()
-                                                    .rounded_sm()
-                                                    .border_1()
-                                                    .border_color(if selected {
-                                                        h(0x6ea8fe)
-                                                    } else {
-                                                        h(0x555555)
-                                                    })
-                                                    .when(selected, |this| {
-                                                        this.bg(h(0x3b6ea8)).child(
-                                                            Icon::new(IconName::CiCheck)
-                                                                .size(px(10.0))
-                                                                .color(h(0xffffff)),
-                                                        )
-                                                    }),
-                                            )
-                                            .child(
-                                                div()
-                                                    .text_size(px(13.0))
-                                                    .text_color(h(0xffffff))
-                                                    .whitespace_nowrap()
-                                                    .child(option.label),
-                                            );
-
-                                        if let Some(on_toggle_option) = on_toggle_option.clone() {
-                                            row = row.on_click({
-                                                let option_id = option_id.clone();
-                                                move |_, window, cx| {
-                                                    on_toggle_option(option_id.as_ref(), window, cx)
-                                                }
-                                            });
-                                        }
-
-                                        row
-                                    })),
-                            ),
-                    ))
+            .child(OpenPresence {
+                id: ElementId::from(SharedString::from(format!("{select_id}-presence"))),
+                open,
+                child: Some(
+                    div()
+                        .child(deferred(overlay).with_priority(0))
+                        .child(deferred(panel))
+                        .into_any_element(),
+                ),
             })
     }
 }
