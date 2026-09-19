@@ -74,6 +74,8 @@ impl ActivityKindIcon {
     fn icon(&self) -> IconName {
         match self.kind {
             ActivityKind::Merged => IconName::PullRequest,
+            ActivityKind::Closed => IconName::PrClosed,
+            ActivityKind::Reopened => IconName::PullRequest,
             ActivityKind::Comment => IconName::Comment,
             ActivityKind::Approved => IconName::CiCheck,
             ActivityKind::ChangesRequested => IconName::CiX,

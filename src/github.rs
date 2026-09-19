@@ -348,6 +348,31 @@ impl CodeHost for GithubApi {
                       ... on Mannequin { name }
                     }
                     repository { nameWithOwner }
+                    timelineItems(last: 20, itemTypes: [CLOSED_EVENT, REOPENED_EVENT]) {
+                      nodes {
+                        __typename
+                        ... on ClosedEvent {
+                          createdAt
+                          actor {
+                            login
+                            avatarUrl
+                            ... on User { name }
+                            ... on Organization { name }
+                            ... on Mannequin { name }
+                          }
+                        }
+                        ... on ReopenedEvent {
+                          createdAt
+                          actor {
+                            login
+                            avatarUrl
+                            ... on User { name }
+                            ... on Organization { name }
+                            ... on Mannequin { name }
+                          }
+                        }
+                      }
+                    }
                     comments(last: 20) {
                       nodes {
                         author {
@@ -437,8 +462,22 @@ impl CodeHost for GithubApi {
             #[serde(rename = "mergedBy")]
             merged_by: Option<Actor>,
             repository: Repository,
+            #[serde(rename = "timelineItems")]
+            timeline_items: TimelineConnection,
             comments: CommentConnection,
             reviews: ReviewConnection,
+        }
+        #[derive(Deserialize)]
+        struct TimelineConnection {
+            nodes: Vec<TimelineNode>,
+        }
+        #[derive(Deserialize)]
+        struct TimelineNode {
+            #[serde(rename = "__typename")]
+            typename: String,
+            #[serde(rename = "createdAt")]
+            created_at: Option<String>,
+            actor: Option<Actor>,
         }
         #[derive(Deserialize)]
         struct Repository {
@@ -523,7 +562,7 @@ impl CodeHost for GithubApi {
 
         let mut items = Vec::new();
         for pr in viewer.pull_requests.nodes {
-            if let Some(merged_at) = pr.merged_at {
+            if let Some(merged_at) = pr.merged_at.clone() {
                 items.push(ActivityItem {
                     kind: ActivityKind::Merged,
                     actor: pr
@@ -536,6 +575,35 @@ impl CodeHost for GithubApi {
                     repo: pr.repository.name_with_owner.clone(),
                     url: pr.url.clone(),
                     occurred_at: merged_at,
+                });
+            }
+
+            for event in pr.timeline_items.nodes {
+                let Some(occurred_at) = event.created_at else {
+                    continue;
+                };
+                let kind = match event.typename.as_str() {
+                    "ClosedEvent" => {
+                        if pr.merged_at.as_ref() == Some(&occurred_at) {
+                            continue;
+                        }
+                        ActivityKind::Closed
+                    }
+                    "ReopenedEvent" => ActivityKind::Reopened,
+                    _ => continue,
+                };
+                items.push(ActivityItem {
+                    kind,
+                    actor: event
+                        .actor
+                        .as_ref()
+                        .map(Actor::display_name)
+                        .unwrap_or_else(|| "someone".into()),
+                    avatar_url: event.actor.as_ref().map(|a| a.avatar_url.clone()),
+                    pr_title: pr.title.clone(),
+                    repo: pr.repository.name_with_owner.clone(),
+                    url: pr.url.clone(),
+                    occurred_at,
                 });
             }
 
