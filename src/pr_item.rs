@@ -3,7 +3,7 @@ use crate::model::{CiStatus, PrStatus, PullRequest};
 use crate::pr_status::{CiStatusIcon, PrStatusIcon};
 use gpui::{
     App, ClickEvent, ElementId, InteractiveElement, IntoElement, MouseDownEvent, ParentElement,
-    RenderOnce, SharedString, Styled, Window, div, prelude::*, px, rgb,
+    Pixels, RenderOnce, SharedString, Styled, Window, div, prelude::*, px, rgb,
 };
 
 type ToggleMenuHandler = Box<dyn Fn(&ClickEvent, &mut Window, &mut App) + 'static>;
@@ -27,6 +27,27 @@ pub struct PrItem {
     on_toggle_menu: Option<ToggleMenuHandler>,
     on_dismiss_menu: Option<DismissMenuHandler>,
     on_close_pr: Option<ClosePrHandler>,
+}
+
+fn truncated_title(title: SharedString, window: &mut Window) -> SharedString {
+    let list_width = window.viewport_size().width.min(px(560.0));
+    let reserved = px(16.0) // pr-list px_4
+        + px(16.0)
+        + px(12.0) // pr item px_3
+        + px(12.0)
+        + px(8.0) // gap before context menu
+        + px(28.0) // context menu button
+        + px(20.0) // status icon
+        + px(8.0); // gap after icon
+    let max_width: Pixels = (list_width - reserved).max(px(48.0));
+
+    let text_style = window.text_style();
+    let font_size = text_style.font_size.to_pixels(window.rem_size());
+    let mut runs = vec![text_style.to_run(title.len())];
+    window
+        .text_system()
+        .line_wrapper(text_style.font(), font_size)
+        .truncate_line(title, max_width, "...", &mut runs)
 }
 
 fn pr_number_label(pr: &PullRequest) -> String {
@@ -96,9 +117,10 @@ impl PrItem {
 }
 
 impl RenderOnce for PrItem {
-    fn render(self, _window: &mut Window, _cx: &mut App) -> impl IntoElement {
+    fn render(self, window: &mut Window, _cx: &mut App) -> impl IntoElement {
         let url = self.url.clone();
         let menu_id = self.menu_id;
+        let title = truncated_title(self.title, window);
 
         let mut menu = ContextMenu::new(menu_id)
             .open(self.menu_open)
@@ -123,6 +145,8 @@ impl RenderOnce for PrItem {
         div()
             .id(self.id)
             .group(self.group)
+            .w_full()
+            .min_w_0()
             .flex()
             .items_center()
             .gap_2()
@@ -145,8 +169,16 @@ impl RenderOnce for PrItem {
                             .flex()
                             .gap_2()
                             .items_center()
+                            .min_w_0()
                             .child(PrStatusIcon::new(self.status.clone()))
-                            .child(div().child(self.title)),
+                            .child(
+                                div()
+                                    .flex_1()
+                                    .min_w_0()
+                                    .overflow_hidden()
+                                    .whitespace_nowrap()
+                                    .child(title),
+                            ),
                     )
                     .child(
                         div()
