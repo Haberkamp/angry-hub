@@ -72,6 +72,8 @@ impl PullRequest {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ActivityKind {
     Merged,
+    Closed,
+    Reopened,
     Comment,
     Approved,
     ChangesRequested,
@@ -81,6 +83,8 @@ impl ActivityKind {
     pub fn label(&self) -> &'static str {
         match self {
             ActivityKind::Merged => "merged",
+            ActivityKind::Closed => "closed",
+            ActivityKind::Reopened => "reopened",
             ActivityKind::Comment => "commented",
             ActivityKind::Approved => "approved",
             ActivityKind::ChangesRequested => "requested changes",
@@ -90,6 +94,8 @@ impl ActivityKind {
     pub fn color(&self) -> gpui::Hsla {
         match self {
             ActivityKind::Merged => gpui::rgb(0xa371f7).into(),
+            ActivityKind::Closed => gpui::rgb(0x8b949e).into(),
+            ActivityKind::Reopened => gpui::rgb(0x3fb950).into(),
             ActivityKind::Comment => gpui::rgb(0x58a6ff).into(),
             ActivityKind::Approved => gpui::rgb(0x3fb950).into(),
             ActivityKind::ChangesRequested => gpui::rgb(0xf85149).into(),
