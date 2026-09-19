@@ -126,6 +126,7 @@ impl RenderOnce for SegmentedControl {
             .items_center()
             .p(px(3.0))
             .rounded_full()
+            .bg(h(0x2a2a2a))
             .child(
                 div()
                     .relative()
