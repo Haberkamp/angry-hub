@@ -45,8 +45,6 @@ pub trait CodeHost: Send + Sync {
 
     fn oauth_app_restricted_from_repo(&self, name_with_owner: &str) -> DataSourceResult<bool>;
 
-    fn merged_pull_requests(&self, urls: &[String]) -> DataSourceResult<Vec<PullRequest>>;
-
     fn my_pr_activity(&self) -> DataSourceResult<Vec<ActivityItem>>;
 
     fn logout(&self);
