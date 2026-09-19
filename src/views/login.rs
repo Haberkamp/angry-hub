@@ -1,9 +1,10 @@
 use std::sync::Arc;
 
-use gpui::{Context, FontWeight, Render, Window, div, prelude::*, rgb};
+use gpui::{Context, FontWeight, Render, Window, div, prelude::*};
 use gpui_selectable_text::SelectableText;
 use rooter::Router;
 
+use crate::color;
 use crate::datasource::code_host;
 use crate::session::Session;
 use crate::ui::Button;
@@ -100,7 +101,7 @@ impl Render for Login {
                 if let Some(e) = error {
                     children.push(
                         div()
-                            .text_color(rgb(0xff6666))
+                            .text_color(color::red::s9())
                             .child(e.to_string())
                             .into_any_element(),
                     );

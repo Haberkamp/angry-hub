@@ -21,10 +21,10 @@ impl PrStatus {
 
     pub fn color(&self) -> gpui::Hsla {
         match self {
-            PrStatus::Open => gpui::rgb(0x3fb950).into(),
-            PrStatus::Draft => gpui::rgb(0x6e7681).into(),
-            PrStatus::Closed => gpui::rgb(0x8b949e).into(),
-            PrStatus::Merged => gpui::rgb(0xa371f7).into(),
+            PrStatus::Open => crate::color::green::s9(),
+            PrStatus::Draft => crate::color::gray::s9(),
+            PrStatus::Closed => crate::color::gray::s10(),
+            PrStatus::Merged => crate::color::blue::s11(),
         }
     }
 }
@@ -40,10 +40,10 @@ pub enum CiStatus {
 impl CiStatus {
     pub fn color(&self) -> gpui::Hsla {
         match self {
-            CiStatus::Success => gpui::rgb(0x3fb950).into(),
-            CiStatus::Failure => gpui::rgb(0xf85149).into(),
-            CiStatus::Pending => gpui::rgb(0xd29922).into(),
-            CiStatus::None => gpui::rgb(0x6e7681).into(),
+            CiStatus::Success => crate::color::green::s9(),
+            CiStatus::Failure => crate::color::red::s9(),
+            CiStatus::Pending => crate::color::blue::s8(),
+            CiStatus::None => crate::color::gray::s9(),
         }
     }
 }
@@ -93,12 +93,12 @@ impl ActivityKind {
 
     pub fn color(&self) -> gpui::Hsla {
         match self {
-            ActivityKind::Merged => gpui::rgb(0xa371f7).into(),
-            ActivityKind::Closed => gpui::rgb(0x8b949e).into(),
-            ActivityKind::Reopened => gpui::rgb(0x3fb950).into(),
-            ActivityKind::Comment => gpui::rgb(0x58a6ff).into(),
-            ActivityKind::Approved => gpui::rgb(0x3fb950).into(),
-            ActivityKind::ChangesRequested => gpui::rgb(0xf85149).into(),
+            ActivityKind::Merged => crate::color::blue::s11(),
+            ActivityKind::Closed => crate::color::gray::s10(),
+            ActivityKind::Reopened => crate::color::green::s9(),
+            ActivityKind::Comment => crate::color::blue::s9(),
+            ActivityKind::Approved => crate::color::green::s9(),
+            ActivityKind::ChangesRequested => crate::color::red::s9(),
         }
     }
 }

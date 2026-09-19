@@ -4,9 +4,10 @@ use std::time::Duration;
 
 use gpui::{
     AnyElement, Context, Entity, PromptLevel, Render, SharedString, Subscription, Timer, Window,
-    div, prelude::*, rgb,
+    div, prelude::*,
 };
 
+use crate::color;
 use crate::datasource::code_host;
 use crate::github::PrsCache;
 use crate::layout::Chrome;
@@ -298,7 +299,7 @@ impl Render for PullRequests {
             ],
             PrsState::Failed(e) => vec![
                 div()
-                    .text_color(rgb(0xff6666))
+                    .text_color(color::red::s9())
                     .child(e.to_string())
                     .into_any_element(),
                 Button::new("retry-prs", "Retry")
