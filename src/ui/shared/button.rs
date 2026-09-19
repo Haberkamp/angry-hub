@@ -16,7 +16,7 @@ type ClickHandler = Box<dyn Fn(&ClickEvent, &mut Window, &mut App) + 'static>;
 pub struct Button {
     id: gpui::SharedString,
     label: Option<gpui::SharedString>,
-    icon: Option<crate::icon::Icon>,
+    icon: Option<super::icon::Icon>,
     variant: ButtonVariant,
     is_loading: bool,
     on_click: Option<ClickHandler>,
@@ -77,7 +77,7 @@ impl Button {
         self.variant(ButtonVariant::Tertiary)
     }
 
-    pub fn icon(mut self, icon: crate::icon::Icon) -> Self {
+    pub fn icon(mut self, icon: super::icon::Icon) -> Self {
         self.icon = Some(icon);
         self
     }
@@ -123,7 +123,7 @@ impl RenderOnce for Button {
             .text_color(style.text)
             .children(icon)
             .when(is_loading, |this| {
-                this.child(crate::spinner::Spinner::new(format!("{}-spinner", id)))
+                this.child(super::spinner::Spinner::new(format!("{}-spinner", id)))
             })
             .children(label);
 

@@ -11,33 +11,20 @@ use gpui::{
     WindowBounds, WindowOptions, div, ease_in_out, prelude::*, px, rgb, size,
 };
 
-mod avatar;
-mod button;
-mod context_menu;
 mod datasource;
 mod github;
 mod http;
-mod icon;
 mod model;
-mod pr_item;
-mod pr_status;
 mod prefs;
-mod segmented;
-mod select;
-mod spinner;
-mod tab;
+mod ui;
 
-use avatar::Avatar;
-use button::Button;
 use datasource::CodeHost;
 use gpui_selectable_text::SelectableText;
-use icon::{Icon, IconName};
-use pr_item::PrItem;
 use prefs::Prefs;
-use segmented::{Segment, SegmentedControl};
-use select::{MultiSelect, SelectOption};
-use spinner::Spinner;
-use tab::Tab;
+use ui::{
+    Avatar, Button, Icon, IconName, MultiSelect, PrItem, Segment, SegmentedControl, SelectOption,
+    Spinner, Tab,
+};
 
 const DEFAULT_WINDOW_SIZE: gpui::Size<gpui::Pixels> = size(px(800.0), px(600.0));
 const RESTORE_ANIMATION: Duration = Duration::from_millis(250);
@@ -673,7 +660,7 @@ impl Render for HelloWorld {
                                                 .gap_2()
                                                 .items_center()
                                                 .text_color(rgb(0x8b949e))
-                                                .child(pr_status::ActivityKindIcon::new(item.kind))
+                                                .child(ui::ActivityKindIcon::new(item.kind))
                                                 .child(Avatar::new(avatar).size(px(20.0)))
                                                 .child(div().child(headline))
                                                 .child(div().child(item.repo.clone())),

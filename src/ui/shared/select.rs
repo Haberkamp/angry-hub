@@ -6,7 +6,7 @@ use gpui::{
     deferred, div, point, prelude::*, px, rgb,
 };
 
-use crate::icon::{Icon, IconName};
+use super::icon::{Icon, IconName};
 
 fn h(c: u32) -> Hsla {
     rgb(c).into()

@@ -1,6 +1,6 @@
-use crate::context_menu::{ContextMenu, ContextMenuItem};
+use super::pr_status::{CiStatusIcon, PrStatusIcon};
+use super::shared::{ContextMenu, ContextMenuItem};
 use crate::model::{CiStatus, PrStatus, PullRequest};
-use crate::pr_status::{CiStatusIcon, PrStatusIcon};
 use gpui::{
     App, ClickEvent, ElementId, InteractiveElement, IntoElement, MouseDownEvent, ParentElement,
     Pixels, RenderOnce, SharedString, Styled, Window, div, prelude::*, px, rgb,

@@ -3,7 +3,7 @@ use gpui::{
     prelude::*, px, rgb,
 };
 
-use crate::icon::{Icon, IconName};
+use super::icon::{Icon, IconName};
 
 #[derive(IntoElement)]
 pub struct Avatar {
