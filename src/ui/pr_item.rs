@@ -71,7 +71,7 @@ impl PrItem {
             open_id: SharedString::from(format!("pr-open-{ix}")),
             menu_id: SharedString::from(format!("pr-menu-{ix}")),
             group: SharedString::from(format!("pr-row-{ix}")),
-            title: pr.title.clone().into(),
+            title: pr.title.trim().to_string().into(),
             repo: pr.repo.clone().into(),
             number: pr_number_label(pr).into(),
             url: pr.url.clone().into(),
