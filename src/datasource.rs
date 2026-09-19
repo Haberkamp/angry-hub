@@ -11,13 +11,26 @@ pub type DataSourceResult<T> = Result<T, DataSourceError>;
 #[derive(Debug, Clone)]
 pub struct DataSourceError {
     pub message: String,
+    session_ended: bool,
 }
 
 impl DataSourceError {
     pub fn new(message: impl Into<String>) -> Self {
         Self {
             message: message.into(),
+            session_ended: false,
         }
+    }
+
+    pub fn session_ended() -> Self {
+        Self {
+            message: "session ended".into(),
+            session_ended: true,
+        }
+    }
+
+    pub fn is_session_ended(&self) -> bool {
+        self.session_ended
     }
 
     pub fn is_oauth_app_restricted(&self) -> bool {
@@ -58,6 +71,7 @@ pub trait CodeHost: Send + Sync {
 
 pub trait AuthStore: Send + Sync {
     fn load_token(&self) -> Option<String>;
+    #[allow(dead_code)]
     fn save_token(&self, token: &str);
     fn clear(&self);
 }

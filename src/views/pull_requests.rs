@@ -12,7 +12,7 @@ use crate::github::PrsCache;
 use crate::layout::Chrome;
 use crate::model;
 use crate::prefs::Prefs;
-use crate::session::Session;
+use crate::session::{self, Session};
 use crate::ui::{Button, MultiSelect, PrItem, SelectOption, Spinner, Tab};
 
 enum PrsState {
@@ -61,24 +61,24 @@ impl PullRequests {
         view._activation_subscription =
             Some(cx.observe_window_activation(window, |this, window, cx| {
                 if window.is_window_active() && cx.global::<Session>().logged_in {
-                    this.refresh_prs(cx);
+                    this.refresh_prs(window, cx);
                 }
             }));
         if cx.global::<Session>().logged_in {
             view.loading = matches!(view.prs, PrsState::Loading);
-            view.fetch_prs(cx);
+            view.fetch_prs(window, cx);
         }
-        view.poll(cx);
+        view.poll(window, cx);
         view
     }
 
-    fn poll(&mut self, cx: &mut Context<Self>) {
-        cx.spawn(async move |this, cx| {
+    fn poll(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        cx.spawn_in(window, async move |this, cx| {
             loop {
                 Timer::after(Duration::from_secs(30)).await;
-                this.update(cx, |this, cx| {
+                this.update_in(cx, |this, window, cx| {
                     if cx.global::<Session>().logged_in {
-                        this.fetch_prs(cx);
+                        this.fetch_prs(window, cx);
                     }
                 })
                 .ok();
@@ -97,32 +97,35 @@ impl PullRequests {
             .update(cx, |chrome, cx| chrome.set_refreshing(show, cx));
     }
 
-    fn refresh_prs(&mut self, cx: &mut Context<Self>) {
+    fn refresh_prs(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         self.refreshing = true;
         self.sync_refresh_indicator(cx);
-        self.fetch_prs(cx);
+        self.fetch_prs(window, cx);
     }
 
-    fn fetch_prs(&mut self, cx: &mut Context<Self>) {
+    fn fetch_prs(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         if self.fetch_in_flight || !cx.global::<Session>().logged_in {
             return;
         }
         self.fetch_in_flight = true;
         let host = code_host();
-        cx.spawn(async move |this, cx| {
+        cx.spawn_in(window, async move |this, cx| {
             let result = cx
                 .background_executor()
                 .spawn(async move { host.my_pull_requests() })
                 .await;
 
-            this.update(cx, |this, cx| {
+            this.update_in(cx, |this, window, cx| {
                 this.fetch_in_flight = false;
                 this.refreshing = false;
                 this.loading = false;
-                this.prs = match result {
-                    Ok(prs) => PrsState::Loaded(prs),
-                    Err(e) => PrsState::Failed(e.message.into()),
-                };
+                match result {
+                    Ok(prs) => this.prs = PrsState::Loaded(prs),
+                    Err(e) if e.is_session_ended() => {
+                        session::force_logout(window, cx);
+                    }
+                    Err(e) => this.prs = PrsState::Failed(e.message.into()),
+                }
                 this.sync_refresh_indicator(cx);
             })
             .ok();
@@ -247,11 +250,18 @@ impl PullRequests {
                     })
                     .ok();
                 }
+                Err(e) if e.is_session_ended() => {
+                    this.update_in(cx, |this, window, cx| {
+                        this.finish_close_pr(cx);
+                        session::force_logout(window, cx);
+                    })
+                    .ok();
+                }
                 Err(e) => {
                     eprintln!("failed to close pull request: {e}");
-                    this.update(cx, |this, cx| {
+                    this.update_in(cx, |this, window, cx| {
                         this.finish_close_pr(cx);
-                        this.fetch_prs(cx);
+                        this.fetch_prs(window, cx);
                     })
                     .ok();
                 }
@@ -262,7 +272,7 @@ impl PullRequests {
 }
 
 impl Render for PullRequests {
-    fn render(&mut self, _window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+    fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         if !cx.global::<Session>().logged_in {
             self.prs = PrsState::Loading;
             self.fetch_in_flight = false;
@@ -272,7 +282,7 @@ impl Render for PullRequests {
         } else if matches!(self.prs, PrsState::Loading) && !self.fetch_in_flight {
             self.loading = true;
             self.sync_refresh_indicator(cx);
-            self.fetch_prs(cx);
+            self.fetch_prs(window, cx);
         }
 
         let mut repo_tabs: Vec<AnyElement> = Vec::new();
@@ -292,7 +302,7 @@ impl Render for PullRequests {
                     .child(e.to_string())
                     .into_any_element(),
                 Button::new("retry-prs", "Retry")
-                    .on_click(cx.listener(|this, _, _, cx| this.refresh_prs(cx)))
+                    .on_click(cx.listener(|this, _, window, cx| this.refresh_prs(window, cx)))
                     .into_any_element(),
             ],
             PrsState::Loaded(prs) => {

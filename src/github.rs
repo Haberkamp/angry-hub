@@ -1,11 +1,14 @@
 //! Concrete implementation of the `datasource` traits for GitHub:
 //! OAuth device flow + REST search API, backed by a filesystem token store.
 
+use std::sync::Mutex;
 use std::{thread, time::Duration};
 
 use serde::{Deserialize, Serialize};
 
 use crate::datasource::{AuthStore, AuthSuccess, CodeHost, DataSourceError, DataSourceResult};
+
+static TOKEN_REFRESH: Mutex<()> = Mutex::new(());
 use crate::model::{ActivityItem, ActivityKind, CiStatus, DeviceCode, PrStatus, PullRequest};
 use std::path::PathBuf;
 
@@ -36,26 +39,148 @@ impl GithubApi {
             .ok_or_else(|| DataSourceError::new("not logged in"))
     }
 
+    fn save_tokens(&self, access_token: String, refresh_token: Option<String>) {
+        self.token_store.save(&StoredToken {
+            access_token,
+            refresh_token,
+        });
+    }
+
+    fn try_refresh_session(&self, stale_access_token: &str) -> bool {
+        let _guard = TOKEN_REFRESH
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
+        let Some(stored) = self.token_store.load() else {
+            return false;
+        };
+        if stored.access_token != stale_access_token {
+            return true;
+        }
+        let Some(refresh_token) = stored
+            .refresh_token
+            .clone()
+            .filter(|token| !token.is_empty())
+        else {
+            return false;
+        };
+
+        #[derive(Serialize)]
+        struct Request {
+            client_id: &'static str,
+            grant_type: &'static str,
+            refresh_token: String,
+        }
+        #[derive(Deserialize)]
+        struct Response {
+            access_token: Option<String>,
+            refresh_token: Option<String>,
+        }
+
+        let Ok(resp) = self
+            .client
+            .post(ACCESS_TOKEN_URL)
+            .header("Accept", "application/json")
+            .json(&Request {
+                client_id: GITHUB_CLIENT_ID,
+                grant_type: "refresh_token",
+                refresh_token,
+            })
+            .send()
+        else {
+            return false;
+        };
+        let Ok(body) = resp.text() else {
+            return false;
+        };
+        let Ok(resp) = serde_json::from_str::<Response>(&body) else {
+            return false;
+        };
+        if let Some(access_token) = resp.access_token.filter(|token| !token.is_empty()) {
+            self.save_tokens(
+                access_token,
+                resp.refresh_token
+                    .filter(|token| !token.is_empty())
+                    .or(stored.refresh_token),
+            );
+            return true;
+        }
+        false
+    }
+
+    fn authed_get(&self, url: &str) -> DataSourceResult<(u16, String)> {
+        self.authed_send("GET", url, None::<&()>)
+    }
+
+    fn authed_post_json(
+        &self,
+        url: &str,
+        json: &impl Serialize,
+    ) -> DataSourceResult<(u16, String)> {
+        self.authed_send("POST", url, Some(json))
+    }
+
+    fn authed_send(
+        &self,
+        method: &str,
+        url: &str,
+        json: Option<&impl Serialize>,
+    ) -> DataSourceResult<(u16, String)> {
+        let mut did_refresh = false;
+        loop {
+            let token = self.bearer()?;
+            let mut request = match method {
+                "GET" => self.client.get(url),
+                "POST" => self.client.post(url),
+                other => {
+                    return Err(DataSourceError::new(format!(
+                        "unsupported HTTP method: {other}"
+                    )));
+                }
+            };
+            request = request
+                .header("Accept", "application/vnd.github+json")
+                .header("Authorization", format!("Bearer {token}"))
+                .header("User-Agent", "angry-hub");
+            if let Some(json) = json {
+                request = request.json(json);
+            }
+            let resp = request
+                .send()
+                .map_err(|e| DataSourceError::new(format!("request failed: {e}")))?;
+            let status = resp.status().as_u16();
+            let body = resp
+                .text()
+                .map_err(|e| DataSourceError::new(format!("failed to read response: {e}")))?;
+            if is_expired_auth(status, &body) {
+                if did_refresh || !self.try_refresh_session(&token) {
+                    self.token_store.clear();
+                    return Err(DataSourceError::session_ended());
+                }
+                did_refresh = true;
+                continue;
+            }
+            return Ok((status, body));
+        }
+    }
+
+    fn graphql(&self, json: &impl Serialize) -> DataSourceResult<String> {
+        let (status, body) = self.authed_post_json("https://api.github.com/graphql", json)?;
+        if !(200..300).contains(&status) {
+            return Err(DataSourceError::new(format!(
+                "graphql request failed ({status}): {body}"
+            )));
+        }
+        Ok(body)
+    }
+
     fn viewer_login(&self) -> DataSourceResult<String> {
         #[derive(Deserialize)]
         struct User {
             login: String,
         }
 
-        let token = self.bearer()?;
-        let resp = self
-            .client
-            .get("https://api.github.com/user")
-            .header("Accept", "application/vnd.github+json")
-            .header("Authorization", format!("Bearer {token}"))
-            .header("User-Agent", "angry-hub")
-            .send()
-            .map_err(|e| DataSourceError::new(format!("request failed: {e}")))?;
-        let status = resp.status();
-        let body = resp
-            .text()
-            .map_err(|e| DataSourceError::new(format!("failed to read response: {e}")))?;
-        if !status.is_success() {
+        let (status, body) = self.authed_get("https://api.github.com/user")?;
+        if !(200..300).contains(&status) {
             return Err(DataSourceError::new(format!(
                 "failed to load user ({status}): {body}"
             )));
@@ -131,6 +256,7 @@ impl CodeHost for GithubApi {
         #[derive(Deserialize)]
         struct Response {
             access_token: Option<String>,
+            refresh_token: Option<String>,
             error: Option<String>,
             #[serde(rename = "error_description")]
             error_description: Option<String>,
@@ -163,7 +289,7 @@ impl CodeHost for GithubApi {
                 .map_err(|e| DataSourceError::new(format!("invalid response: {e}")))?;
 
             if let Some(token) = resp.access_token {
-                self.token_store.save_token(&token);
+                self.save_tokens(token, resp.refresh_token);
                 return Ok(AuthSuccess);
             }
 
@@ -262,28 +388,10 @@ impl CodeHost for GithubApi {
             state: Option<String>,
         }
 
-        let token = self.bearer()?;
-        let resp = self
-            .client
-            .post("https://api.github.com/graphql")
-            .header("Accept", "application/vnd.github+json")
-            .header("Authorization", format!("Bearer {token}"))
-            .header("User-Agent", "angry-hub")
-            .json(&Request {
-                query: QUERY,
-                variables: Variables { per_page: 100 },
-            })
-            .send()
-            .map_err(|e| DataSourceError::new(format!("request failed: {e}")))?;
-        let status = resp.status();
-        let body = resp
-            .text()
-            .map_err(|e| DataSourceError::new(format!("failed to read response: {e}")))?;
-        if !status.is_success() {
-            return Err(DataSourceError::new(format!(
-                "graphql request failed ({status}): {body}"
-            )));
-        }
+        let body = self.graphql(&Request {
+            query: QUERY,
+            variables: Variables { per_page: 100 },
+        })?;
         let resp: Response = serde_json::from_str(&body)
             .map_err(|e| DataSourceError::new(format!("invalid response: {e}")))?;
         if let Some(errors) = &resp.errors {
@@ -527,28 +635,10 @@ impl CodeHost for GithubApi {
             comments: CommentConnection,
         }
 
-        let token = self.bearer()?;
-        let resp = self
-            .client
-            .post("https://api.github.com/graphql")
-            .header("Accept", "application/vnd.github+json")
-            .header("Authorization", format!("Bearer {token}"))
-            .header("User-Agent", "angry-hub")
-            .json(&Request {
-                query: QUERY,
-                variables: Variables { per_page: 25 },
-            })
-            .send()
-            .map_err(|e| DataSourceError::new(format!("request failed: {e}")))?;
-        let status = resp.status();
-        let body = resp
-            .text()
-            .map_err(|e| DataSourceError::new(format!("failed to read response: {e}")))?;
-        if !status.is_success() {
-            return Err(DataSourceError::new(format!(
-                "graphql request failed ({status}): {body}"
-            )));
-        }
+        let body = self.graphql(&Request {
+            query: QUERY,
+            variables: Variables { per_page: 25 },
+        })?;
         let resp: Response = serde_json::from_str(&body)
             .map_err(|e| DataSourceError::new(format!("invalid response: {e}")))?;
         if let Some(errors) = &resp.errors {
@@ -708,28 +798,10 @@ impl CodeHost for GithubApi {
             message: String,
         }
 
-        let token = self.bearer()?;
-        let resp = self
-            .client
-            .post("https://api.github.com/graphql")
-            .header("Accept", "application/vnd.github+json")
-            .header("Authorization", format!("Bearer {token}"))
-            .header("User-Agent", "angry-hub")
-            .json(&Request {
-                query: MUTATION,
-                variables: Variables { id },
-            })
-            .send()
-            .map_err(|e| DataSourceError::new(format!("request failed: {e}")))?;
-        let status = resp.status();
-        let body = resp
-            .text()
-            .map_err(|e| DataSourceError::new(format!("failed to read response: {e}")))?;
-        if !status.is_success() {
-            return Err(DataSourceError::new(format!(
-                "graphql request failed ({status}): {body}"
-            )));
-        }
+        let body = self.graphql(&Request {
+            query: MUTATION,
+            variables: Variables { id },
+        })?;
         let resp: Response = serde_json::from_str(&body)
             .map_err(|e| DataSourceError::new(format!("invalid response: {e}")))?;
         if let Some(errors) = &resp.errors {
@@ -753,25 +825,13 @@ impl CodeHost for GithubApi {
             return Ok(false);
         }
 
-        let token = self.bearer()?;
         let url =
             format!("https://api.github.com/repos/{owner}/{name}/collaborators/{login}/permission");
-        let resp = self
-            .client
-            .get(&url)
-            .header("Accept", "application/vnd.github+json")
-            .header("Authorization", format!("Bearer {token}"))
-            .header("User-Agent", "angry-hub")
-            .send()
-            .map_err(|e| DataSourceError::new(format!("request failed: {e}")))?;
-        let status = resp.status();
-        let body = resp
-            .text()
-            .map_err(|e| DataSourceError::new(format!("failed to read response: {e}")))?;
+        let (status, body) = self.authed_get(&url)?;
         if crate::datasource::is_oauth_app_restricted_message(&body) {
             return Ok(true);
         }
-        if status.as_u16() == 403 {
+        if status == 403 {
             #[derive(Deserialize)]
             struct ErrorBody {
                 message: Option<String>,
@@ -797,9 +857,11 @@ impl CodeHost for GithubApi {
 /// Stores the OAuth token as JSON in the user's config directory.
 pub struct FileTokenStore;
 
-#[derive(Deserialize, Serialize)]
+#[derive(Clone, Deserialize, Serialize)]
 struct StoredToken {
     access_token: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    refresh_token: Option<String>,
 }
 
 fn token_path() -> std::path::PathBuf {
@@ -837,25 +899,51 @@ impl PrsCache {
     }
 }
 
+impl FileTokenStore {
+    fn load(&self) -> Option<StoredToken> {
+        let contents = std::fs::read_to_string(token_path()).ok()?;
+        serde_json::from_str(&contents).ok()
+    }
+
+    fn save(&self, stored: &StoredToken) {
+        let path = token_path();
+        let _ = std::fs::create_dir_all(path.parent().unwrap());
+        if let Ok(json) = serde_json::to_string(stored) {
+            let _ = std::fs::write(path, json);
+        }
+    }
+}
+
 impl AuthStore for FileTokenStore {
     fn load_token(&self) -> Option<String> {
-        let contents = std::fs::read_to_string(token_path()).ok()?;
-        let stored: StoredToken = serde_json::from_str(&contents).ok()?;
-        Some(stored.access_token)
+        self.load().map(|stored| stored.access_token)
     }
 
     fn save_token(&self, token: &str) {
-        let path = token_path();
-        let _ = std::fs::create_dir_all(path.parent().unwrap());
-        let stored = StoredToken {
+        let refresh_token = self.load().and_then(|stored| stored.refresh_token);
+        self.save(&StoredToken {
             access_token: token.to_string(),
-        };
-        if let Ok(json) = serde_json::to_string(&stored) {
-            let _ = std::fs::write(path, json);
-        }
+            refresh_token,
+        });
     }
 
     fn clear(&self) {
         let _ = std::fs::remove_file(token_path());
     }
+}
+
+fn is_expired_auth(status: u16, body: &str) -> bool {
+    if status == 401 {
+        return true;
+    }
+    let lower = body.to_ascii_lowercase();
+    lower.contains("bad credentials")
+        || lower.contains("session ended")
+        || lower.contains("session has expired")
+        || lower.contains("session has been invalidated")
+        || lower.contains("this api session has expired")
+        || lower.contains("token expired")
+        || lower.contains("token has expired")
+        || lower.contains("token has been revoked")
+        || lower.contains("\"type\":\"forbidden\"") && lower.contains("requires authentication")
 }
