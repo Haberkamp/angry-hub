@@ -1,6 +1,7 @@
+use crate::color;
 use gpui::{
     AnyElement, App, IntoElement, ParentElement, Pixels, RenderOnce, Styled, Window, div, img,
-    prelude::*, px, rgb,
+    prelude::*, px,
 };
 
 use super::icon::{Icon, IconName};
@@ -33,11 +34,11 @@ impl Avatar {
             .flex()
             .items_center()
             .justify_center()
-            .bg(rgb(0x3d3d3d))
+            .bg(color::surface_hover())
             .child(
                 Icon::new(IconName::User)
                     .size(icon_size)
-                    .color(rgb(0x8b949e)),
+                    .color(color::text_muted()),
             )
             .into_any_element()
     }

@@ -1,15 +1,12 @@
 use std::sync::Arc;
 use std::time::Duration;
 
+use crate::color;
 use gpui::{
-    Animation, AnimationExt as _, AnyElement, App, ClickEvent, Hsla, InteractiveElement,
-    IntoElement, ParentElement, RenderOnce, SharedString, Styled, Window, div, ease_out_quint,
-    prelude::*, px, relative, rgb,
+    Animation, AnimationExt as _, AnyElement, App, ClickEvent, InteractiveElement, IntoElement,
+    ParentElement, RenderOnce, SharedString, Styled, Window, div, ease_out_quint, prelude::*, px,
+    relative,
 };
-
-fn h(c: u32) -> Hsla {
-    rgb(c).into()
-}
 
 type ChangeHandler = Box<dyn Fn(&str, &mut Window, &mut App) + 'static>;
 
@@ -102,7 +99,7 @@ impl RenderOnce for SegmentedControl {
                 .top(px(0.0))
                 .bottom(px(0.0))
                 .rounded_full()
-                .bg(h(0x3d3d3d))
+                .bg(color::surface_hover())
                 .w(relative(1.0 / count));
             if animate {
                 pill.with_animation(
@@ -126,7 +123,7 @@ impl RenderOnce for SegmentedControl {
             .items_center()
             .p(px(3.0))
             .rounded_full()
-            .bg(h(0x2a2a2a))
+            .bg(color::surface())
             .child(
                 div()
                     .relative()
@@ -153,10 +150,10 @@ impl RenderOnce for SegmentedControl {
                             .rounded_full()
                             .text_size(px(14.0))
                             .cursor_pointer()
-                            .when(is_selected, |this| this.text_color(h(0xffffff)))
+                            .when(is_selected, |this| this.text_color(color::text()))
                             .when(!is_selected, |this| {
-                                this.text_color(h(0xaaaaaa))
-                                    .hover(|this| this.bg(h(0x333333).opacity(0.5)))
+                                this.text_color(color::text_secondary())
+                                    .hover(|this| this.bg(color::surface_subtle().opacity(0.5)))
                             })
                             .child(segment.label);
 

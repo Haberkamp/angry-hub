@@ -1,20 +1,16 @@
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
+use crate::color;
 use gpui::{
     AnchoredPositionMode, Animation, AnimationExt as _, AnyElement, App, Bounds, ClickEvent,
-    Corner, Element, ElementId, GlobalElementId, Hsla, InspectorElementId, InteractiveElement,
+    Corner, Element, ElementId, GlobalElementId, InspectorElementId, InteractiveElement,
     IntoElement, LayoutId, MouseButton, MouseDownEvent, ParentElement, Pixels, RenderOnce,
     SharedString, Styled, Window, anchored, deferred, div, ease_out_quint, point, prelude::*, px,
-    rgb,
 };
 
 use super::icon::{Icon, IconName};
 use super::spinner::Spinner;
-
-fn h(c: u32) -> Hsla {
-    rgb(c).into()
-}
 
 #[derive(Clone)]
 pub struct ContextMenuItem {
@@ -207,7 +203,11 @@ impl ContextMenu {
 impl RenderOnce for ContextMenu {
     fn render(self, window: &mut Window, _cx: &mut App) -> impl IntoElement {
         let open = self.open;
-        let trigger_bg = if open { h(0x3d3d3d) } else { h(0x2a2a2a) };
+        let trigger_bg = if open {
+            color::surface_hover()
+        } else {
+            color::surface()
+        };
         let on_select = self.on_select;
         let viewport = window.viewport_size();
         let dismiss_id = SharedString::from(format!("{}-dismiss", self.id));
@@ -221,7 +221,7 @@ impl RenderOnce for ContextMenu {
             .items_center()
             .justify_center()
             .bg(trigger_bg)
-            .hover(|this| this.bg(h(0x3d3d3d)))
+            .hover(|this| this.bg(color::surface_hover()))
             .rounded_full()
             .cursor_pointer()
             .when(!open, |this| {
@@ -235,7 +235,7 @@ impl RenderOnce for ContextMenu {
             .child(
                 Icon::new(IconName::Ellipsis)
                     .size(px(14.0))
-                    .color(h(0xaaaaaa)),
+                    .color(color::text_secondary()),
             );
 
         if let Some(on_toggle_open) = self.on_toggle_open {
@@ -274,9 +274,9 @@ impl RenderOnce for ContextMenu {
             .flex()
             .flex_col()
             .p_1()
-            .bg(h(0x2a2a2a))
+            .bg(color::surface())
             .border_1()
-            .border_color(h(0x444444))
+            .border_color(color::border())
             .rounded(px(9.0))
             .shadow_md()
             .occlude()
@@ -294,13 +294,13 @@ impl RenderOnce for ContextMenu {
                     .justify_between()
                     .gap_3()
                     .when(!loading, |this| {
-                        this.cursor_pointer().hover(|this| this.bg(h(0x3d3d3d)))
+                        this.cursor_pointer().hover(|this| this.bg(color::surface_hover()))
                     })
                     .when(loading, |this| this.cursor_default())
                     .child(
                         div()
                             .text_size(px(13.0))
-                            .text_color(h(0xffffff))
+                            .text_color(color::text())
                             .whitespace_nowrap()
                             .child(item.label),
                     )

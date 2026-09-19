@@ -21,10 +21,10 @@ impl PrStatus {
 
     pub fn color(&self) -> gpui::Hsla {
         match self {
-            PrStatus::Open => gpui::rgb(0x3fb950).into(),
-            PrStatus::Draft => gpui::rgb(0x6e7681).into(),
-            PrStatus::Closed => gpui::rgb(0x8b949e).into(),
-            PrStatus::Merged => gpui::rgb(0xa371f7).into(),
+            PrStatus::Open => crate::color::success(),
+            PrStatus::Draft => crate::color::draft(),
+            PrStatus::Closed => crate::color::text_muted(),
+            PrStatus::Merged => crate::color::merged(),
         }
     }
 }
@@ -40,10 +40,10 @@ pub enum CiStatus {
 impl CiStatus {
     pub fn color(&self) -> gpui::Hsla {
         match self {
-            CiStatus::Success => gpui::rgb(0x3fb950).into(),
-            CiStatus::Failure => gpui::rgb(0xf85149).into(),
-            CiStatus::Pending => gpui::rgb(0xd29922).into(),
-            CiStatus::None => gpui::rgb(0x6e7681).into(),
+            CiStatus::Success => crate::color::success(),
+            CiStatus::Failure => crate::color::danger(),
+            CiStatus::Pending => crate::color::warning(),
+            CiStatus::None => crate::color::draft(),
         }
     }
 }
@@ -93,12 +93,12 @@ impl ActivityKind {
 
     pub fn color(&self) -> gpui::Hsla {
         match self {
-            ActivityKind::Merged => gpui::rgb(0xa371f7).into(),
-            ActivityKind::Closed => gpui::rgb(0x8b949e).into(),
-            ActivityKind::Reopened => gpui::rgb(0x3fb950).into(),
-            ActivityKind::Comment => gpui::rgb(0x58a6ff).into(),
-            ActivityKind::Approved => gpui::rgb(0x3fb950).into(),
-            ActivityKind::ChangesRequested => gpui::rgb(0xf85149).into(),
+            ActivityKind::Merged => crate::color::merged(),
+            ActivityKind::Closed => crate::color::text_muted(),
+            ActivityKind::Reopened => crate::color::success(),
+            ActivityKind::Comment => crate::color::comment(),
+            ActivityKind::Approved => crate::color::success(),
+            ActivityKind::ChangesRequested => crate::color::danger(),
         }
     }
 }

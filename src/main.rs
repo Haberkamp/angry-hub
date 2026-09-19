@@ -6,11 +6,11 @@ use std::time::{Duration, Instant};
 
 use gpui::{
     App, Application, AssetSource, Bounds, Context, MouseDownEvent, Render, Result, SharedString,
-    TitlebarOptions, Window, WindowBounds, WindowOptions, div, ease_in_out, prelude::*, px, rgb,
-    size,
+    TitlebarOptions, Window, WindowBounds, WindowOptions, div, ease_in_out, prelude::*, px, size,
 };
 use rooter::Router;
 
+mod color;
 mod datasource;
 mod github;
 mod http;
@@ -125,8 +125,8 @@ impl Render for AppView {
             .flex()
             .flex_col()
             .relative()
-            .bg(rgb(0x1e1e1e))
-            .text_color(rgb(0xffffff))
+            .bg(color::bg())
+            .text_color(color::text())
             .child(self.router.clone())
             .on_mouse_down(
                 gpui::MouseButton::Left,

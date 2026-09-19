@@ -1,19 +1,15 @@
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
+use crate::color;
 use gpui::{
     AnchoredPositionMode, Animation, AnimationExt as _, AnyElement, App, Bounds, ClickEvent,
-    Corner, Element, ElementId, GlobalElementId, Hsla, InspectorElementId, InteractiveElement,
+    Corner, Element, ElementId, GlobalElementId, InspectorElementId, InteractiveElement,
     IntoElement, LayoutId, MouseButton, MouseDownEvent, ParentElement, Pixels, RenderOnce,
     SharedString, Styled, Window, anchored, deferred, div, ease_out_quint, point, prelude::*, px,
-    rgb,
 };
 
 use super::icon::{Icon, IconName};
-
-fn h(c: u32) -> Hsla {
-    rgb(c).into()
-}
 
 #[derive(Clone)]
 pub struct SelectOption {
@@ -201,7 +197,11 @@ impl MultiSelect {
 impl RenderOnce for MultiSelect {
     fn render(self, window: &mut Window, _cx: &mut App) -> impl IntoElement {
         let open = self.open;
-        let trigger_bg = if open { h(0x3d3d3d) } else { h(0x2a2a2a) };
+        let trigger_bg = if open {
+            color::surface_hover()
+        } else {
+            color::surface()
+        };
         let on_toggle_option = self.on_toggle_option;
         let viewport = window.viewport_size();
 
@@ -213,13 +213,13 @@ impl RenderOnce for MultiSelect {
             .items_center()
             .justify_center()
             .bg(trigger_bg)
-            .hover(|this| this.bg(h(0x3d3d3d)))
+            .hover(|this| this.bg(color::surface_hover()))
             .rounded_full()
             .cursor_pointer()
             .child(
                 Icon::new(IconName::ChevronDown)
                     .size(px(14.0))
-                    .color(h(0xaaaaaa)),
+                    .color(color::text_secondary()),
             );
 
         if let Some(on_toggle_open) = self.on_toggle_open {
@@ -260,9 +260,9 @@ impl RenderOnce for MultiSelect {
             .flex()
             .flex_col()
             .p_1()
-            .bg(h(0x2a2a2a))
+            .bg(color::surface())
             .border_1()
-            .border_color(h(0x444444))
+            .border_color(color::border())
             .rounded(px(9.0))
             .shadow_md()
             .occlude()
@@ -285,7 +285,7 @@ impl RenderOnce for MultiSelect {
                             .items_center()
                             .gap_2()
                             .cursor_pointer()
-                            .hover(|this| this.bg(h(0x3d3d3d)))
+                            .hover(|this| this.bg(color::surface_hover()))
                             .child(
                                 div()
                                     .size(px(14.0))
@@ -294,19 +294,23 @@ impl RenderOnce for MultiSelect {
                                     .justify_center()
                                     .rounded_sm()
                                     .border_1()
-                                    .border_color(if selected { h(0x6ea8fe) } else { h(0x555555) })
+                                    .border_color(if selected {
+                                        color::accent()
+                                    } else {
+                                        color::border_strong()
+                                    })
                                     .when(selected, |this| {
-                                        this.bg(h(0x3b6ea8)).child(
+                                        this.bg(color::accent_fill()).child(
                                             Icon::new(IconName::CiCheck)
                                                 .size(px(10.0))
-                                                .color(h(0xffffff)),
+                                                .color(color::text()),
                                         )
                                     }),
                             )
                             .child(
                                 div()
                                     .text_size(px(13.0))
-                                    .text_color(h(0xffffff))
+                                    .text_color(color::text())
                                     .whitespace_nowrap()
                                     .child(option.label),
                             );

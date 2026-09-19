@@ -1,8 +1,9 @@
 use std::sync::Arc;
 use std::time::Duration;
 
-use gpui::{Context, Render, Subscription, Timer, Window, div, prelude::*, px, rgb};
+use gpui::{Context, Render, Subscription, Timer, Window, div, prelude::*, px};
 
+use crate::color;
 use crate::datasource::code_host;
 use crate::model;
 use crate::session::{self, Session};
@@ -104,7 +105,7 @@ impl Render for Activity {
             ],
             ActivityState::Failed(e) => vec![
                 div()
-                    .text_color(rgb(0xff6666))
+                    .text_color(color::text_error())
                     .child(e.to_string())
                     .into_any_element(),
                 Button::new("retry-activity", "Retry")
@@ -130,7 +131,7 @@ impl Render for Activity {
                                 .py_2()
                                 .px_3()
                                 .rounded_md()
-                                .hover(|this| this.bg(rgb(0x2a2a2a)))
+                                .hover(|this| this.bg(color::surface()))
                                 .cursor_pointer()
                                 .on_click(move |_, _window, cx| cx.open_url(&url))
                                 .child(
@@ -138,7 +139,7 @@ impl Render for Activity {
                                         .flex()
                                         .gap_2()
                                         .items_center()
-                                        .text_color(rgb(0x8b949e))
+                                        .text_color(color::text_muted())
                                         .child(ActivityKindIcon::new(item.kind))
                                         .child(Avatar::new(avatar).size(px(20.0)))
                                         .child(div().child(headline))

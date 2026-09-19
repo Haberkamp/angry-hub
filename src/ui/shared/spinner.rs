@@ -1,6 +1,7 @@
+use crate::color;
 use gpui::{
     Animation, AnimationExt, App, Hsla, IntoElement, Pixels, Radians, RenderOnce, SharedString,
-    Styled, Transformation, Window, px, rgb, svg,
+    Styled, Transformation, Window, px, svg,
 };
 
 pub const SPINNER_PATH: &str = "icons/spinner.svg";
@@ -17,7 +18,7 @@ impl Spinner {
         Self {
             id: id.into(),
             size: px(16.0),
-            color: rgb(0x8b949e).into(),
+            color: color::text_muted(),
         }
     }
 

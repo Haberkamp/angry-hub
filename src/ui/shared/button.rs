@@ -1,6 +1,7 @@
+use crate::color;
 use gpui::{
     App, ClickEvent, Hsla, InteractiveElement, IntoElement, ParentElement, RenderOnce, Styled,
-    Window, div, prelude::*, rgb,
+    Window, div, prelude::*,
 };
 
 #[derive(Clone, Copy, Default, PartialEq, Eq)]
@@ -30,26 +31,22 @@ struct ButtonStyle {
     text: Hsla,
 }
 
-fn h(c: u32) -> Hsla {
-    rgb(c).into()
-}
-
 impl ButtonVariant {
     fn style(self) -> ButtonStyle {
         match self {
             ButtonVariant::Primary => ButtonStyle {
-                bg: h(0x2d2d2d),
-                hover_bg: h(0x3d3d3d),
-                active_bg: h(0x444444),
-                border: Some(h(0x555555)),
-                text: h(0xffffff),
+                bg: color::surface_raised(),
+                hover_bg: color::surface_hover(),
+                active_bg: color::surface_active(),
+                border: Some(color::border_strong()),
+                text: color::text(),
             },
             ButtonVariant::Tertiary => ButtonStyle {
-                bg: h(0x1e1e1e),
-                hover_bg: h(0x333333),
-                active_bg: h(0x3a3a3a),
+                bg: color::bg(),
+                hover_bg: color::surface_subtle(),
+                active_bg: color::surface_subtle_active(),
                 border: None,
-                text: h(0xaaaaaa),
+                text: color::text_secondary(),
             },
         }
     }
