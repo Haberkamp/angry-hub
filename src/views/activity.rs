@@ -150,7 +150,7 @@ impl Render for Activity {
                                         .flex()
                                         .gap_2()
                                         .items_center()
-                                        .child(div().child(item.pr_title.clone())),
+                                        .child(div().child(item.pr_title.trim().to_string())),
                                 )
                         })
                         .map(|el| el.into_any_element())
