@@ -1,8 +1,6 @@
 use gpui::{AnyElement, App, Context, Entity, PromptLevel, Render, Window, div, prelude::*, px};
 use rooter::{Outlet, RouteContext, Router};
 
-use crate::datasource::code_host;
-use crate::session::Session;
 use crate::ui::{Button, Icon, IconName, Segment, SegmentedControl, Spinner};
 
 pub struct Chrome {
@@ -138,15 +136,12 @@ fn logout(window: &mut Window, cx: &mut App) {
         &["Logout", "Cancel"],
         cx,
     );
-    let host = code_host();
     let window = window.window_handle();
     cx.spawn(async move |cx| {
         if answer.await == Ok(0) {
-            host.logout();
             window
                 .update(cx, |_, window, cx| {
-                    cx.global_mut::<Session>().logged_in = false;
-                    Router::navigate_window(window, cx, "/login");
+                    crate::session::force_logout(window, cx);
                 })
                 .ok();
         }

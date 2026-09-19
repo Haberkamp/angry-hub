@@ -5,7 +5,7 @@ use gpui::{Context, Render, Subscription, Timer, Window, div, prelude::*, px, rg
 
 use crate::datasource::code_host;
 use crate::model;
-use crate::session::Session;
+use crate::session::{self, Session};
 use crate::ui::{ActivityKindIcon, Avatar, Button, Spinner};
 
 enum ActivityState {
@@ -30,23 +30,23 @@ impl Activity {
         view._activation_subscription =
             Some(cx.observe_window_activation(window, |this, window, cx| {
                 if window.is_window_active() && cx.global::<Session>().logged_in {
-                    this.fetch_activity(cx);
+                    this.fetch_activity(window, cx);
                 }
             }));
         if cx.global::<Session>().logged_in {
-            view.fetch_activity(cx);
+            view.fetch_activity(window, cx);
         }
-        view.poll(cx);
+        view.poll(window, cx);
         view
     }
 
-    fn poll(&mut self, cx: &mut Context<Self>) {
-        cx.spawn(async move |this, cx| {
+    fn poll(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        cx.spawn_in(window, async move |this, cx| {
             loop {
                 Timer::after(Duration::from_secs(30)).await;
-                this.update(cx, |this, cx| {
+                this.update_in(cx, |this, window, cx| {
                     if cx.global::<Session>().logged_in {
-                        this.fetch_activity(cx);
+                        this.fetch_activity(window, cx);
                     }
                 })
                 .ok();
@@ -55,23 +55,26 @@ impl Activity {
         .detach();
     }
 
-    fn fetch_activity(&mut self, cx: &mut Context<Self>) {
+    fn fetch_activity(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         if self.fetch_in_flight || !cx.global::<Session>().logged_in {
             return;
         }
         self.fetch_in_flight = true;
         let host = code_host();
-        cx.spawn(async move |this, cx| {
+        cx.spawn_in(window, async move |this, cx| {
             let result = cx
                 .background_executor()
                 .spawn(async move { host.my_pr_activity() })
                 .await;
-            this.update(cx, |this, _cx| {
+            this.update_in(cx, |this, window, cx| {
                 this.fetch_in_flight = false;
-                this.activity = match result {
-                    Ok(items) => ActivityState::Loaded(items),
-                    Err(e) => ActivityState::Failed(e.message.into()),
-                };
+                match result {
+                    Ok(items) => this.activity = ActivityState::Loaded(items),
+                    Err(e) if e.is_session_ended() => {
+                        session::force_logout(window, cx);
+                    }
+                    Err(e) => this.activity = ActivityState::Failed(e.message.into()),
+                }
             })
             .ok();
             this.update(cx, |_, cx| cx.notify()).ok();
@@ -81,12 +84,12 @@ impl Activity {
 }
 
 impl Render for Activity {
-    fn render(&mut self, _window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+    fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         if !cx.global::<Session>().logged_in {
             self.activity = ActivityState::Loading;
             self.fetch_in_flight = false;
         } else if matches!(self.activity, ActivityState::Loading) && !self.fetch_in_flight {
-            self.fetch_activity(cx);
+            self.fetch_activity(window, cx);
         }
 
         let content: Vec<_> = match &self.activity {
@@ -105,7 +108,7 @@ impl Render for Activity {
                     .child(e.to_string())
                     .into_any_element(),
                 Button::new("retry-activity", "Retry")
-                    .on_click(cx.listener(|this, _, _, cx| this.fetch_activity(cx)))
+                    .on_click(cx.listener(|this, _, window, cx| this.fetch_activity(window, cx)))
                     .into_any_element(),
             ],
             ActivityState::Loaded(items) => {
