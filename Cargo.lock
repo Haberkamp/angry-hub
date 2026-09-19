@@ -69,6 +69,7 @@ dependencies = [
  "gpui",
  "gpui-selectable-text",
  "reqwest",
+ "rooter",
  "serde",
  "serde_json",
 ]
@@ -3116,6 +3117,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "matchit"
+version = "0.8.6"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "2f926ade0c4e170215ae43342bf13b9310a437609c81f29f86c5df6657582ef9"
+
+[[package]]
 name = "maybe-rayon"
 version = "0.1.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -4533,6 +4540,17 @@ dependencies = [
  "libc",
  "untrusted",
  "windows-sys 0.52.0",
+]
+
+[[package]]
+name = "rooter"
+version = "0.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "16413854f68ca290a714159a312b8f1c550b33a9d1551e62df45a5506469657b"
+dependencies = [
+ "gpui",
+ "matchit",
+ "regex",
 ]
 
 [[package]]
