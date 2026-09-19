@@ -105,7 +105,7 @@ impl Render for Activity {
             ],
             ActivityState::Failed(e) => vec![
                 div()
-                    .text_color(color::text_error())
+                    .text_color(color::red::s9())
                     .child(e.to_string())
                     .into_any_element(),
                 Button::new("retry-activity", "Retry")
@@ -131,7 +131,7 @@ impl Render for Activity {
                                 .py_2()
                                 .px_3()
                                 .rounded_md()
-                                .hover(|this| this.bg(color::surface()))
+                                .hover(|this| this.bg(color::gray::s3()))
                                 .cursor_pointer()
                                 .on_click(move |_, _window, cx| cx.open_url(&url))
                                 .child(
@@ -139,7 +139,7 @@ impl Render for Activity {
                                         .flex()
                                         .gap_2()
                                         .items_center()
-                                        .text_color(color::text_muted())
+                                        .text_color(color::gray::s10())
                                         .child(ActivityKindIcon::new(item.kind))
                                         .child(Avatar::new(avatar).size(px(20.0)))
                                         .child(div().child(headline))

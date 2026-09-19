@@ -125,8 +125,8 @@ impl Render for AppView {
             .flex()
             .flex_col()
             .relative()
-            .bg(color::bg())
-            .text_color(color::text())
+            .bg(color::gray::s1())
+            .text_color(color::gray::s12())
             .child(self.router.clone())
             .on_mouse_down(
                 gpui::MouseButton::Left,

@@ -154,7 +154,7 @@ impl RenderOnce for PrItem {
             .py_2()
             .px_3()
             .rounded_md()
-            .hover(|this| this.bg(color::surface()))
+            .hover(|this| this.bg(color::gray::s3()))
             .child(
                 div()
                     .flex_1()
@@ -188,7 +188,7 @@ impl RenderOnce for PrItem {
                             .items_center()
                             .ml(px(28.0))
                             .text_size(px(12.0))
-                            .text_color(color::text_muted())
+                            .text_color(color::gray::s10())
                             .child(
                                 div()
                                     .flex()

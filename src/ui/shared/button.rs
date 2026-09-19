@@ -35,18 +35,18 @@ impl ButtonVariant {
     fn style(self) -> ButtonStyle {
         match self {
             ButtonVariant::Primary => ButtonStyle {
-                bg: color::surface_raised(),
-                hover_bg: color::surface_hover(),
-                active_bg: color::surface_active(),
-                border: Some(color::border_strong()),
-                text: color::text(),
+                bg: color::gray::s2(),
+                hover_bg: color::gray::s4(),
+                active_bg: color::gray::s5(),
+                border: Some(color::gray::s8()),
+                text: color::gray::s12(),
             },
             ButtonVariant::Tertiary => ButtonStyle {
-                bg: color::bg(),
-                hover_bg: color::surface_subtle(),
-                active_bg: color::surface_subtle_active(),
+                bg: color::gray::s1(),
+                hover_bg: color::gray::s3(),
+                active_bg: color::gray::s4(),
                 border: None,
-                text: color::text_secondary(),
+                text: color::gray::s9(),
             },
         }
     }

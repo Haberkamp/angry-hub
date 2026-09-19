@@ -21,10 +21,10 @@ impl PrStatus {
 
     pub fn color(&self) -> gpui::Hsla {
         match self {
-            PrStatus::Open => crate::color::success(),
-            PrStatus::Draft => crate::color::draft(),
-            PrStatus::Closed => crate::color::text_muted(),
-            PrStatus::Merged => crate::color::merged(),
+            PrStatus::Open => crate::color::green::s9(),
+            PrStatus::Draft => crate::color::gray::s9(),
+            PrStatus::Closed => crate::color::gray::s10(),
+            PrStatus::Merged => crate::color::blue::s11(),
         }
     }
 }
@@ -40,10 +40,10 @@ pub enum CiStatus {
 impl CiStatus {
     pub fn color(&self) -> gpui::Hsla {
         match self {
-            CiStatus::Success => crate::color::success(),
-            CiStatus::Failure => crate::color::danger(),
-            CiStatus::Pending => crate::color::warning(),
-            CiStatus::None => crate::color::draft(),
+            CiStatus::Success => crate::color::green::s9(),
+            CiStatus::Failure => crate::color::red::s9(),
+            CiStatus::Pending => crate::color::blue::s8(),
+            CiStatus::None => crate::color::gray::s9(),
         }
     }
 }
@@ -93,12 +93,12 @@ impl ActivityKind {
 
     pub fn color(&self) -> gpui::Hsla {
         match self {
-            ActivityKind::Merged => crate::color::merged(),
-            ActivityKind::Closed => crate::color::text_muted(),
-            ActivityKind::Reopened => crate::color::success(),
-            ActivityKind::Comment => crate::color::comment(),
-            ActivityKind::Approved => crate::color::success(),
-            ActivityKind::ChangesRequested => crate::color::danger(),
+            ActivityKind::Merged => crate::color::blue::s11(),
+            ActivityKind::Closed => crate::color::gray::s10(),
+            ActivityKind::Reopened => crate::color::green::s9(),
+            ActivityKind::Comment => crate::color::blue::s9(),
+            ActivityKind::Approved => crate::color::green::s9(),
+            ActivityKind::ChangesRequested => crate::color::red::s9(),
         }
     }
 }

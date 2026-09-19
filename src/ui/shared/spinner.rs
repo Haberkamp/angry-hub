@@ -18,7 +18,7 @@ impl Spinner {
         Self {
             id: id.into(),
             size: px(16.0),
-            color: color::text_muted(),
+            color: color::gray::s10(),
         }
     }
 

@@ -101,7 +101,7 @@ impl Render for Login {
                 if let Some(e) = error {
                     children.push(
                         div()
-                            .text_color(color::text_error())
+                            .text_color(color::red::s9())
                             .child(e.to_string())
                             .into_any_element(),
                     );

@@ -299,7 +299,7 @@ impl Render for PullRequests {
             ],
             PrsState::Failed(e) => vec![
                 div()
-                    .text_color(color::text_error())
+                    .text_color(color::red::s9())
                     .child(e.to_string())
                     .into_any_element(),
                 Button::new("retry-prs", "Retry")

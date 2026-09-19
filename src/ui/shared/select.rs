@@ -198,9 +198,9 @@ impl RenderOnce for MultiSelect {
     fn render(self, window: &mut Window, _cx: &mut App) -> impl IntoElement {
         let open = self.open;
         let trigger_bg = if open {
-            color::surface_hover()
+            color::gray::s4()
         } else {
-            color::surface()
+            color::gray::s3()
         };
         let on_toggle_option = self.on_toggle_option;
         let viewport = window.viewport_size();
@@ -213,13 +213,13 @@ impl RenderOnce for MultiSelect {
             .items_center()
             .justify_center()
             .bg(trigger_bg)
-            .hover(|this| this.bg(color::surface_hover()))
+            .hover(|this| this.bg(color::gray::s4()))
             .rounded_full()
             .cursor_pointer()
             .child(
                 Icon::new(IconName::ChevronDown)
                     .size(px(14.0))
-                    .color(color::text_secondary()),
+                    .color(color::gray::s9()),
             );
 
         if let Some(on_toggle_open) = self.on_toggle_open {
@@ -260,9 +260,9 @@ impl RenderOnce for MultiSelect {
             .flex()
             .flex_col()
             .p_1()
-            .bg(color::surface())
+            .bg(color::white())
             .border_1()
-            .border_color(color::border())
+            .border_color(color::gray::s6())
             .rounded(px(9.0))
             .shadow_md()
             .occlude()
@@ -285,7 +285,7 @@ impl RenderOnce for MultiSelect {
                             .items_center()
                             .gap_2()
                             .cursor_pointer()
-                            .hover(|this| this.bg(color::surface_hover()))
+                            .hover(|this| this.bg(color::gray::s4()))
                             .child(
                                 div()
                                     .size(px(14.0))
@@ -295,22 +295,22 @@ impl RenderOnce for MultiSelect {
                                     .rounded_sm()
                                     .border_1()
                                     .border_color(if selected {
-                                        color::accent()
+                                        color::blue::s9()
                                     } else {
-                                        color::border_strong()
+                                        color::gray::s8()
                                     })
                                     .when(selected, |this| {
-                                        this.bg(color::accent_fill()).child(
+                                        this.bg(color::blue::s9()).child(
                                             Icon::new(IconName::CiCheck)
                                                 .size(px(10.0))
-                                                .color(color::text()),
+                                                .color(color::gray::s1()),
                                         )
                                     }),
                             )
                             .child(
                                 div()
                                     .text_size(px(13.0))
-                                    .text_color(color::text())
+                                    .text_color(color::gray::s12())
                                     .whitespace_nowrap()
                                     .child(option.label),
                             );

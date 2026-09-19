@@ -34,11 +34,11 @@ impl Avatar {
             .flex()
             .items_center()
             .justify_center()
-            .bg(color::surface_hover())
+            .bg(color::gray::s4())
             .child(
                 Icon::new(IconName::User)
                     .size(icon_size)
-                    .color(color::text_muted()),
+                    .color(color::gray::s10()),
             )
             .into_any_element()
     }

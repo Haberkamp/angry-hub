@@ -99,7 +99,7 @@ impl RenderOnce for SegmentedControl {
                 .top(px(0.0))
                 .bottom(px(0.0))
                 .rounded_full()
-                .bg(color::surface_hover())
+                .bg(color::gray::s4())
                 .w(relative(1.0 / count));
             if animate {
                 pill.with_animation(
@@ -123,7 +123,7 @@ impl RenderOnce for SegmentedControl {
             .items_center()
             .p(px(3.0))
             .rounded_full()
-            .bg(color::surface())
+            .bg(color::gray::s3())
             .child(
                 div()
                     .relative()
@@ -150,10 +150,10 @@ impl RenderOnce for SegmentedControl {
                             .rounded_full()
                             .text_size(px(14.0))
                             .cursor_pointer()
-                            .when(is_selected, |this| this.text_color(color::text()))
+                            .when(is_selected, |this| this.text_color(color::gray::s12()))
                             .when(!is_selected, |this| {
-                                this.text_color(color::text_secondary())
-                                    .hover(|this| this.bg(color::surface_subtle().opacity(0.5)))
+                                this.text_color(color::gray::s9())
+                                    .hover(|this| this.bg(color::gray::s3().opacity(0.5)))
                             })
                             .child(segment.label);
 

@@ -68,7 +68,7 @@ impl RenderOnce for Icon {
         let size = self.size.unwrap_or_else(|| px(16.0));
         // GPUI only paints an `svg()` when `style.text.color` is set on that
         // element itself — parent `text_color` is not enough.
-        let color = self.color.unwrap_or_else(color::text);
+        let color = self.color.unwrap_or_else(color::gray::s12);
         svg()
             .path(self.name.path())
             .size(size)

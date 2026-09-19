@@ -204,9 +204,9 @@ impl RenderOnce for ContextMenu {
     fn render(self, window: &mut Window, _cx: &mut App) -> impl IntoElement {
         let open = self.open;
         let trigger_bg = if open {
-            color::surface_hover()
+            color::gray::s4()
         } else {
-            color::surface()
+            color::gray::s3()
         };
         let on_select = self.on_select;
         let viewport = window.viewport_size();
@@ -221,7 +221,7 @@ impl RenderOnce for ContextMenu {
             .items_center()
             .justify_center()
             .bg(trigger_bg)
-            .hover(|this| this.bg(color::surface_hover()))
+            .hover(|this| this.bg(color::gray::s4()))
             .rounded_full()
             .cursor_pointer()
             .when(!open, |this| {
@@ -235,7 +235,7 @@ impl RenderOnce for ContextMenu {
             .child(
                 Icon::new(IconName::Ellipsis)
                     .size(px(14.0))
-                    .color(color::text_secondary()),
+                    .color(color::gray::s9()),
             );
 
         if let Some(on_toggle_open) = self.on_toggle_open {
@@ -274,9 +274,9 @@ impl RenderOnce for ContextMenu {
             .flex()
             .flex_col()
             .p_1()
-            .bg(color::surface())
+            .bg(color::white())
             .border_1()
-            .border_color(color::border())
+            .border_color(color::gray::s6())
             .rounded(px(9.0))
             .shadow_md()
             .occlude()
@@ -294,13 +294,14 @@ impl RenderOnce for ContextMenu {
                     .justify_between()
                     .gap_3()
                     .when(!loading, |this| {
-                        this.cursor_pointer().hover(|this| this.bg(color::surface_hover()))
+                        this.cursor_pointer()
+                            .hover(|this| this.bg(color::gray::s4()))
                     })
                     .when(loading, |this| this.cursor_default())
                     .child(
                         div()
                             .text_size(px(13.0))
-                            .text_color(color::text())
+                            .text_color(color::gray::s12())
                             .whitespace_nowrap()
                             .child(item.label),
                     )

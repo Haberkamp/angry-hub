@@ -1,7 +1,7 @@
 use crate::color;
 use gpui::{
-    App, ClickEvent, Hsla, InteractiveElement, IntoElement, ParentElement, RenderOnce, SharedString,
-    Styled, Window, div, prelude::*, px,
+    App, ClickEvent, Hsla, InteractiveElement, IntoElement, ParentElement, RenderOnce,
+    SharedString, Styled, Window, div, prelude::*, px,
 };
 
 type ClickHandler = Box<dyn Fn(&ClickEvent, &mut Window, &mut App) + 'static>;
@@ -39,9 +39,9 @@ impl Tab {
 
     fn colors(&self) -> (Hsla, Hsla) {
         if self.selected {
-            (color::surface_hover(), color::text())
+            (color::gray::s4(), color::gray::s12())
         } else {
-            (color::surface(), color::text_secondary())
+            (color::gray::s3(), color::gray::s9())
         }
     }
 }
@@ -60,7 +60,7 @@ impl RenderOnce for Tab {
             .items_center()
             .justify_center()
             .bg(bg)
-            .hover(|this| this.bg(color::surface_hover()))
+            .hover(|this| this.bg(color::gray::s4()))
             .rounded_full()
             .cursor_pointer()
             .text_size(px(13.0))
