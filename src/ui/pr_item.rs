@@ -12,6 +12,7 @@ use gpui::{
 type ToggleMenuHandler = Box<dyn Fn(&ClickEvent, &mut Window, &mut App) + 'static>;
 type DismissMenuHandler = Box<dyn Fn(&MouseDownEvent, &mut Window, &mut App) + 'static>;
 type ClosePrHandler = Box<dyn Fn(&mut Window, &mut App) + 'static>;
+type CopyBranchHandler = Box<dyn Fn(&mut Window, &mut App) + 'static>;
 type HoverHandler = Box<dyn Fn(&bool, &mut Window, &mut App) + 'static>;
 
 #[derive(IntoElement)]
@@ -39,6 +40,7 @@ pub struct PrItem {
     on_toggle_menu: Option<ToggleMenuHandler>,
     on_dismiss_menu: Option<DismissMenuHandler>,
     on_close_pr: Option<ClosePrHandler>,
+    on_copy_branch: Option<CopyBranchHandler>,
     on_conflict_tooltip_hover: Option<HoverHandler>,
     on_ci_tooltip_hover: Option<HoverHandler>,
 }
@@ -96,6 +98,7 @@ impl PrItem {
             on_toggle_menu: None,
             on_dismiss_menu: None,
             on_close_pr: None,
+            on_copy_branch: None,
             on_conflict_tooltip_hover: None,
             on_ci_tooltip_hover: None,
         }
@@ -129,6 +132,11 @@ impl PrItem {
 
     pub fn on_close_pr(mut self, listener: impl Fn(&mut Window, &mut App) + 'static) -> Self {
         self.on_close_pr = Some(Box::new(listener));
+        self
+    }
+
+    pub fn on_copy_branch(mut self, listener: impl Fn(&mut Window, &mut App) + 'static) -> Self {
+        self.on_copy_branch = Some(Box::new(listener));
         self
     }
 
@@ -185,6 +193,7 @@ impl RenderOnce for PrItem {
             .open(self.menu_open)
             .hover_group(self.group.clone())
             .items(vec![
+                ContextMenuItem::new("copy-branch", "Copy branch name"),
                 ContextMenuItem::new("close", "Close pull request").loading(self.closing),
             ]);
         if let Some(on_toggle_menu) = self.on_toggle_menu {
@@ -193,11 +202,21 @@ impl RenderOnce for PrItem {
         if let Some(on_dismiss_menu) = self.on_dismiss_menu {
             menu = menu.on_dismiss(on_dismiss_menu);
         }
-        if let Some(on_close_pr) = self.on_close_pr {
-            menu = menu.on_select(move |item_id, window, cx| {
-                if item_id == "close" {
-                    on_close_pr(window, cx);
+        if self.on_close_pr.is_some() || self.on_copy_branch.is_some() {
+            let on_close_pr = self.on_close_pr;
+            let on_copy_branch = self.on_copy_branch;
+            menu = menu.on_select(move |item_id, window, cx| match item_id {
+                "copy-branch" => {
+                    if let Some(on_copy_branch) = &on_copy_branch {
+                        on_copy_branch(window, cx);
+                    }
                 }
+                "close" => {
+                    if let Some(on_close_pr) = &on_close_pr {
+                        on_close_pr(window, cx);
+                    }
+                }
+                _ => {}
             });
         }
 
