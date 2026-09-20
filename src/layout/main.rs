@@ -30,11 +30,17 @@ impl Chrome {
     }
 
     fn sync_view(&mut self, selected: &str, on_settings: bool, cx: &mut Context<Self>) {
+        let leaving_settings = self.on_settings && !on_settings;
         if self.on_settings != on_settings {
             self.on_settings = on_settings;
             cx.notify();
         }
         if on_settings {
+            return;
+        }
+        if leaving_settings {
+            self.selected = selected.to_string();
+            self.previous_selected = selected.to_string();
             return;
         }
         if self.selected != selected {

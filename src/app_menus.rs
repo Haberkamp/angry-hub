@@ -13,6 +13,7 @@ actions!(
         CloseWindow,
         ShowPullRequests,
         ShowActivity,
+        ShowSettings,
         Cut,
         Copy,
         Paste,
@@ -34,6 +35,7 @@ pub fn init(cx: &mut App) {
         KeyBinding::new("cmd-w", CloseWindow, None),
         KeyBinding::new("cmd-1", ShowPullRequests, None),
         KeyBinding::new("cmd-2", ShowActivity, None),
+        KeyBinding::new("cmd-,", ShowSettings, None),
         KeyBinding::new("ctrl-cmd-f", ToggleFullScreen, None),
         KeyBinding::new("cmd-x", Cut, None),
         KeyBinding::new("cmd-c", Copy, None),
@@ -45,6 +47,8 @@ pub fn init(cx: &mut App) {
         Menu {
             name: "Angry Hub".into(),
             items: vec![
+                MenuItem::action("Settings…", ShowSettings),
+                MenuItem::separator(),
                 MenuItem::os_submenu("Services", SystemMenuType::Services),
                 MenuItem::separator(),
                 MenuItem::action("Hide Angry Hub", Hide),
