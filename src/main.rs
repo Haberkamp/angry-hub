@@ -5,12 +5,13 @@ use std::sync::Arc;
 use std::time::{Duration, Instant};
 
 use gpui::{
-    App, Application, AssetSource, Bounds, Context, MouseDownEvent, Render, Result, SharedString,
-    Subscription, TitlebarOptions, Window, WindowBounds, WindowOptions, div, ease_in_out,
-    prelude::*, px, size,
+    App, Application, AssetSource, Bounds, Context, FocusHandle, MouseDownEvent, Render, Result,
+    SharedString, Subscription, TitlebarOptions, Window, WindowBounds, WindowOptions, div,
+    ease_in_out, prelude::*, px, size,
 };
 use rooter::Router;
 
+mod app_menus;
 mod color;
 mod datasource;
 mod github;
@@ -65,6 +66,7 @@ impl AssetSource for Assets {
 struct AppView {
     router: gpui::Entity<Router>,
     notifications: gpui::Entity<NotificationList>,
+    focus_handle: FocusHandle,
     resize_generation: u64,
     _subscriptions: Vec<Subscription>,
 }
@@ -82,6 +84,8 @@ impl AppView {
         let pull_requests = cx.new(|cx| PullRequests::new(chrome.clone(), window, cx));
         let activity = cx.new(|cx| Activity::new(window, cx));
         let settings = cx.new(|_| Settings::new());
+        let focus_handle = cx.focus_handle();
+        focus_handle.focus(window);
         let this = Self {
             router: Router::attach(
                 window,
@@ -89,6 +93,7 @@ impl AppView {
                 routes::routes(login, pull_requests, activity, settings, chrome),
             ),
             notifications: NotificationList::init(cx),
+            focus_handle,
             resize_generation: 0,
             _subscriptions: vec![appearance_sub, theme_sub],
         };
@@ -138,6 +143,7 @@ impl Render for AppView {
     fn render(&mut self, _window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         div()
             .id("root")
+            .track_focus(&self.focus_handle)
             .size_full()
             .flex()
             .flex_col()
@@ -146,6 +152,10 @@ impl Render for AppView {
             .text_color(color::text::primary(cx))
             .child(self.router.clone())
             .child(self.notifications.clone())
+            .on_action(|_: &app_menus::Minimize, window, _| window.minimize_window())
+            .on_action(|_: &app_menus::Zoom, window, _| window.zoom_window())
+            .on_action(|_: &app_menus::ToggleFullScreen, window, _| window.toggle_fullscreen())
+            .on_action(|_: &app_menus::CloseWindow, window, _| window.remove_window())
             .on_mouse_down(
                 gpui::MouseButton::Left,
                 cx.listener(|this, event: &MouseDownEvent, window, cx| {
@@ -172,33 +182,42 @@ fn asset_base() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("assets")
 }
 
+pub(crate) fn open_main_window(cx: &mut App) {
+    cx.open_window(
+        WindowOptions {
+            window_bounds: Some(WindowBounds::Windowed(Bounds::centered(
+                None,
+                DEFAULT_WINDOW_SIZE,
+                cx,
+            ))),
+            window_min_size: Some(size(px(480.0), px(600.0))),
+            titlebar: Some(TitlebarOptions {
+                appears_transparent: true,
+                ..Default::default()
+            }),
+            ..Default::default()
+        },
+        |window, cx| cx.new(|cx| AppView::new(window, cx)),
+    )
+    .ok();
+}
+
 fn main() {
-    Application::new()
-        .with_assets(Assets { base: asset_base() })
-        .run(|cx: &mut App| {
-            if let Ok(http) = crate::http::GpuiReqwestClient::new() {
-                cx.set_http_client(Arc::new(http));
-            }
-            cx.set_global(Session {
-                logged_in: code_host().has_saved_session(),
-            });
-            cx.open_window(
-                WindowOptions {
-                    window_bounds: Some(WindowBounds::Windowed(Bounds::centered(
-                        None,
-                        DEFAULT_WINDOW_SIZE,
-                        cx,
-                    ))),
-                    window_min_size: Some(size(px(480.0), px(600.0))),
-                    titlebar: Some(TitlebarOptions {
-                        appears_transparent: true,
-                        ..Default::default()
-                    }),
-                    ..Default::default()
-                },
-                |window, cx| cx.new(|cx| AppView::new(window, cx)),
-            )
-            .unwrap();
-            cx.activate(true);
+    let app = Application::new().with_assets(Assets { base: asset_base() });
+    app.on_reopen(|cx| {
+        if cx.windows().is_empty() {
+            open_main_window(cx);
+        }
+    });
+    app.run(|cx: &mut App| {
+        if let Ok(http) = crate::http::GpuiReqwestClient::new() {
+            cx.set_http_client(Arc::new(http));
+        }
+        cx.set_global(Session {
+            logged_in: code_host().has_saved_session(),
         });
+        app_menus::init(cx);
+        open_main_window(cx);
+        cx.activate(true);
+    });
 }
