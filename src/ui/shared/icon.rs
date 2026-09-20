@@ -6,6 +6,7 @@ pub enum IconName {
     ChevronDown,
     Ellipsis,
     Logout,
+    Settings,
     PullRequest,
     PrClosed,
     PrDraft,
@@ -15,6 +16,7 @@ pub enum IconName {
     NoCi,
     Comment,
     ChangesRequested,
+    Close,
     User,
 }
 
@@ -24,6 +26,7 @@ impl IconName {
             IconName::ChevronDown => "icons/chevron_down.svg",
             IconName::Ellipsis => "icons/ellipsis.svg",
             IconName::Logout => "icons/logout.svg",
+            IconName::Settings => "icons/settings.svg",
             IconName::PullRequest => "icons/pull_request.svg",
             IconName::PrClosed => "icons/pr_closed.svg",
             IconName::PrDraft => "icons/pr_draft.svg",
@@ -33,6 +36,7 @@ impl IconName {
             IconName::NoCi => "icons/pending.svg",
             IconName::Comment => "icons/comment.svg",
             IconName::ChangesRequested => "icons/changes_requested.svg",
+            IconName::Close => "icons/x.svg",
             IconName::User => "icons/user.svg",
         }
     }

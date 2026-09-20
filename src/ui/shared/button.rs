@@ -8,7 +8,7 @@ use gpui::{
 pub enum ButtonVariant {
     #[default]
     Primary,
-    Tertiary,
+    Destructive,
 }
 
 type ClickHandler = Box<dyn Fn(&ClickEvent, &mut Window, &mut App) + 'static>;
@@ -27,7 +27,6 @@ struct ButtonStyle {
     bg: Hsla,
     hover_bg: Hsla,
     active_bg: Hsla,
-    border: Option<Hsla>,
     text: Hsla,
 }
 
@@ -38,15 +37,13 @@ impl ButtonVariant {
                 bg: color::gray::s12(),
                 hover_bg: color::gray::s11(),
                 active_bg: color::gray::s10(),
-                border: None,
                 text: color::gray::s1(),
             },
-            ButtonVariant::Tertiary => ButtonStyle {
-                bg: color::gray::s1(),
-                hover_bg: color::gray::s3(),
-                active_bg: color::gray::s4(),
-                border: None,
-                text: color::gray::s9(),
+            ButtonVariant::Destructive => ButtonStyle {
+                bg: color::red::s9(),
+                hover_bg: color::red::s10(),
+                active_bg: color::red::s11(),
+                text: color::white(),
             },
         }
     }
@@ -70,8 +67,8 @@ impl Button {
         self
     }
 
-    pub fn tertiary(self) -> Self {
-        self.variant(ButtonVariant::Tertiary)
+    pub fn destructive(self) -> Self {
+        self.variant(ButtonVariant::Destructive)
     }
 
     pub fn icon(mut self, icon: super::icon::Icon) -> Self {
@@ -97,7 +94,7 @@ impl RenderOnce for Button {
     fn render(self, _window: &mut Window, _cx: &mut App) -> impl IntoElement {
         let style = self.variant.style();
         let label = self.label.clone();
-        let icon = self.icon.clone();
+        let icon = self.icon.clone().map(|icon| icon.color(style.text));
         let is_loading = self.is_loading;
         let id = self.id.clone();
 
@@ -118,17 +115,13 @@ impl RenderOnce for Button {
             .when(is_loading, |this| this.cursor_default().opacity(0.6))
             .rounded_md()
             .text_color(style.text)
-            .children(icon)
             .when(is_loading, |this| {
                 this.child(
                     super::spinner::Spinner::new(format!("{}-spinner", id)).color(style.text),
                 )
             })
-            .children(label);
-
-        if let Some(border) = style.border {
-            element = element.border_1().border_color(border);
-        }
+            .children(label)
+            .when(!is_loading, |this| this.children(icon));
 
         if let Some(on_click) = self.on_click
             && !is_loading

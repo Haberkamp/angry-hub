@@ -3,12 +3,15 @@ use rooter::{GuardResult, RouteContext, RouterConfig};
 
 use crate::layout::{Chrome, main_layout};
 use crate::session::Session;
-use crate::views::{activity::Activity, login::Login, pull_requests::PullRequests};
+use crate::views::{
+    activity::Activity, login::Login, pull_requests::PullRequests, settings::Settings,
+};
 
 pub fn routes(
     login: Entity<Login>,
     pull_requests: Entity<PullRequests>,
     activity: Entity<Activity>,
+    settings: Entity<Settings>,
     chrome: Entity<Chrome>,
 ) -> RouterConfig {
     RouterConfig::new()
@@ -24,6 +27,7 @@ pub fn routes(
                 })
                 .index(move || pull_requests.clone())
                 .route("activity", move || activity.clone())
+                .route("settings", move || settings.clone())
         })
         .guard(authenticated)
 }

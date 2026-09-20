@@ -1,11 +1,13 @@
-use gpui::{AnyElement, App, Context, Entity, PromptLevel, Render, Window, div, prelude::*, px};
+use gpui::{AnyElement, App, Context, Entity, Render, Window, div, prelude::*, px};
 use rooter::{Outlet, RouteContext, Router};
 
-use crate::ui::{Button, Icon, IconName, Segment, SegmentedControl, Spinner};
+use crate::color;
+use crate::ui::{Icon, IconName, Segment, SegmentedControl, Spinner};
 
 pub struct Chrome {
     previous_selected: String,
     refreshing: bool,
+    on_settings: bool,
 }
 
 impl Chrome {
@@ -13,12 +15,23 @@ impl Chrome {
         Self {
             previous_selected: "prs".into(),
             refreshing: false,
+            on_settings: false,
         }
     }
 
     pub fn set_refreshing(&mut self, refreshing: bool, cx: &mut Context<Self>) {
         if self.refreshing != refreshing {
             self.refreshing = refreshing;
+            cx.notify();
+        }
+    }
+
+    fn set_on_settings(&mut self, on_settings: bool, selected: &str, cx: &mut Context<Self>) {
+        if self.on_settings && !on_settings {
+            self.previous_selected = selected.to_string();
+        }
+        if self.on_settings != on_settings {
+            self.on_settings = on_settings;
             cx.notify();
         }
     }
@@ -30,11 +43,16 @@ pub fn main_layout(
     _window: &mut Window,
     cx: &mut App,
 ) -> AnyElement {
-    let selected = if route.path() == "/activity" {
+    let path = route.path();
+    let is_settings = path == "/settings";
+    let selected = if path == "/activity" {
         "activity"
     } else {
         "prs"
     };
+    chrome.update(cx, |chrome, cx| {
+        chrome.set_on_settings(is_settings, selected, cx)
+    });
     let previous_selected = chrome.read(cx).previous_selected.clone();
 
     div()
@@ -62,43 +80,45 @@ pub fn main_layout(
                         .pt_16()
                         .pb_16()
                         .px_4()
-                        .child(
-                            div()
-                                .id("view-switcher")
-                                .flex()
-                                .flex_none()
-                                .pl_3()
-                                .pb(px(32.0))
-                                .map(|mut this| {
-                                    this.style().align_self = Some(gpui::AlignItems::FlexStart);
-                                    this
-                                })
-                                .child(
-                                    SegmentedControl::new("main-view")
-                                        .segments([
-                                            Segment::new("prs", "Pull Requests"),
-                                            Segment::new("activity", "Activity"),
-                                        ])
-                                        .selected(selected)
-                                        .previous_selected(previous_selected)
-                                        .on_change({
-                                            let chrome = chrome.clone();
-                                            let from = selected.to_string();
-                                            move |id, window, cx| {
-                                                chrome.update(cx, |chrome, cx| {
-                                                    chrome.previous_selected = from.clone();
-                                                    cx.notify();
-                                                });
-                                                let path = if id == "activity" {
-                                                    "/activity"
-                                                } else {
-                                                    "/"
-                                                };
-                                                Router::navigate_window(window, cx, path);
-                                            }
-                                        }),
-                                ),
-                        )
+                        .when(!is_settings, |this| {
+                            this.child(
+                                div()
+                                    .id("view-switcher")
+                                    .flex()
+                                    .flex_none()
+                                    .pl_3()
+                                    .pb(px(32.0))
+                                    .map(|mut this| {
+                                        this.style().align_self = Some(gpui::AlignItems::FlexStart);
+                                        this
+                                    })
+                                    .child(
+                                        SegmentedControl::new("main-view")
+                                            .segments([
+                                                Segment::new("prs", "Pull Requests"),
+                                                Segment::new("activity", "Activity"),
+                                            ])
+                                            .selected(selected)
+                                            .previous_selected(previous_selected)
+                                            .on_change({
+                                                let chrome = chrome.clone();
+                                                let from = selected.to_string();
+                                                move |id, window, cx| {
+                                                    chrome.update(cx, |chrome, cx| {
+                                                        chrome.previous_selected = from.clone();
+                                                        cx.notify();
+                                                    });
+                                                    let path = if id == "activity" {
+                                                        "/activity"
+                                                    } else {
+                                                        "/"
+                                                    };
+                                                    Router::navigate_window(window, cx, path);
+                                                }
+                                            }),
+                                    ),
+                            )
+                        })
                         .child(Outlet::new()),
                 ),
         )
@@ -107,7 +127,19 @@ pub fn main_layout(
 }
 
 impl Render for Chrome {
-    fn render(&mut self, _window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+    fn render(&mut self, _window: &mut Window, _cx: &mut Context<Self>) -> impl IntoElement {
+        let on_settings = self.on_settings;
+        let icon = if on_settings {
+            IconName::Close
+        } else {
+            IconName::Settings
+        };
+        let control_id = if on_settings {
+            "close-settings"
+        } else {
+            "open-settings"
+        };
+
         div()
             .id("top-right")
             .absolute()
@@ -120,31 +152,26 @@ impl Render for Chrome {
                 this.child(div().id("refreshing").child(Spinner::new("refreshing")))
             })
             .child(
-                Button::new("logout", "")
-                    .icon(Icon::new(IconName::Logout).size(px(20.0)))
-                    .tertiary()
-                    .on_click(cx.listener(|_, _, window, cx| logout(window, cx))),
+                div()
+                    .id(control_id)
+                    .size(px(36.0))
+                    .flex_none()
+                    .flex()
+                    .items_center()
+                    .justify_center()
+                    .bg(color::gray::s1())
+                    .hover(|this| this.bg(color::gray::s3()))
+                    .active(|this| this.bg(color::gray::s4()))
+                    .cursor_pointer()
+                    .rounded_full()
+                    .child(Icon::new(icon).size(px(20.0)).color(color::gray::s9()))
+                    .on_click(move |_, window, cx| {
+                        if on_settings {
+                            Router::back_window(window, cx);
+                        } else {
+                            Router::navigate_window(window, cx, "/settings");
+                        }
+                    }),
             )
     }
-}
-
-fn logout(window: &mut Window, cx: &mut App) {
-    let answer = window.prompt(
-        PromptLevel::Warning,
-        "Are you sure you want to log out?",
-        None,
-        &["Logout", "Cancel"],
-        cx,
-    );
-    let window = window.window_handle();
-    cx.spawn(async move |cx| {
-        if answer.await == Ok(0) {
-            window
-                .update(cx, |_, window, cx| {
-                    crate::session::force_logout(window, cx);
-                })
-                .ok();
-        }
-    })
-    .detach();
 }

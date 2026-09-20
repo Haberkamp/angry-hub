@@ -27,6 +27,7 @@ use session::Session;
 use views::activity::Activity;
 use views::login::Login;
 use views::pull_requests::PullRequests;
+use views::settings::Settings;
 
 const DEFAULT_WINDOW_SIZE: gpui::Size<gpui::Pixels> = size(px(800.0), px(600.0));
 const RESTORE_ANIMATION: Duration = Duration::from_millis(250);
@@ -69,11 +70,12 @@ impl AppView {
         let chrome = cx.new(|_| layout::Chrome::new());
         let pull_requests = cx.new(|cx| PullRequests::new(chrome.clone(), window, cx));
         let activity = cx.new(|cx| Activity::new(window, cx));
+        let settings = cx.new(|_| Settings::new());
         Self {
             router: Router::attach(
                 window,
                 cx,
-                routes::routes(login, pull_requests, activity, chrome),
+                routes::routes(login, pull_requests, activity, settings, chrome),
             ),
             resize_generation: 0,
         }
