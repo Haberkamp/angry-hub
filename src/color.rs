@@ -222,3 +222,55 @@ pub mod violet {
 pub fn white() -> Hsla {
     h(0xFFFFFF)
 }
+
+pub mod status {
+    use gpui::Hsla;
+
+    pub fn open() -> Hsla {
+        super::green::s9()
+    }
+
+    pub fn draft() -> Hsla {
+        super::gray::s9()
+    }
+
+    pub fn closed() -> Hsla {
+        super::red::s9()
+    }
+
+    pub fn merged() -> Hsla {
+        super::violet::s11()
+    }
+
+    pub fn success() -> Hsla {
+        super::green::s9()
+    }
+
+    pub fn failure() -> Hsla {
+        super::red::s9()
+    }
+
+    pub fn pending() -> Hsla {
+        super::blue::s8()
+    }
+
+    pub fn none() -> Hsla {
+        super::gray::s9()
+    }
+
+    pub fn comment() -> Hsla {
+        super::blue::s9()
+    }
+
+    pub fn approved() -> Hsla {
+        success()
+    }
+
+    pub fn changes_requested() -> Hsla {
+        failure()
+    }
+
+    pub fn reopened() -> Hsla {
+        open()
+    }
+}
