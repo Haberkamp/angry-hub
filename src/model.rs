@@ -60,6 +60,10 @@ pub struct PullRequest {
     pub url: String,
     pub status: PrStatus,
     pub ci: CiStatus,
+    #[serde(default)]
+    pub approvals: u32,
+    #[serde(default)]
+    pub required_approvals: u32,
     pub updated_at: String,
 }
 

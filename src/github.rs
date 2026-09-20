@@ -325,6 +325,18 @@ impl CodeHost for GithubApi {
                     updatedAt
                     repository { nameWithOwner }
                     statusCheckRollup { state }
+                    latestOpinionatedReviews(first: 40, writersOnly: true) {
+                      nodes { state }
+                    }
+                    baseRef {
+                      branchProtectionRule {
+                        requiresApprovingReviews
+                        requiredApprovingReviewCount
+                      }
+                      refUpdateRule {
+                        requiredApprovingReviewCount
+                      }
+                    }
                   }
                 }
               }
@@ -377,6 +389,10 @@ impl CodeHost for GithubApi {
             repository: Repository,
             #[serde(rename = "statusCheckRollup")]
             status_check_rollup: Option<StatusCheckRollup>,
+            #[serde(rename = "latestOpinionatedReviews")]
+            latest_opinionated_reviews: Option<ReviewConnection>,
+            #[serde(rename = "baseRef")]
+            base_ref: Option<BaseRef>,
         }
         #[derive(Deserialize)]
         struct Repository {
@@ -386,6 +402,51 @@ impl CodeHost for GithubApi {
         #[derive(Deserialize)]
         struct StatusCheckRollup {
             state: Option<String>,
+        }
+        #[derive(Deserialize)]
+        struct ReviewConnection {
+            nodes: Vec<ReviewNode>,
+        }
+        #[derive(Deserialize)]
+        struct ReviewNode {
+            state: String,
+        }
+        #[derive(Deserialize)]
+        struct BaseRef {
+            #[serde(rename = "branchProtectionRule")]
+            branch_protection_rule: Option<BranchProtectionRule>,
+            #[serde(rename = "refUpdateRule")]
+            ref_update_rule: Option<RefUpdateRule>,
+        }
+        #[derive(Deserialize)]
+        struct BranchProtectionRule {
+            #[serde(rename = "requiresApprovingReviews")]
+            requires_approving_reviews: bool,
+            #[serde(rename = "requiredApprovingReviewCount")]
+            required_approving_review_count: Option<u32>,
+        }
+        #[derive(Deserialize)]
+        struct RefUpdateRule {
+            #[serde(rename = "requiredApprovingReviewCount")]
+            required_approving_review_count: u32,
+        }
+
+        fn required_approvals(base_ref: Option<&BaseRef>) -> u32 {
+            let Some(base_ref) = base_ref else {
+                return 0;
+            };
+            let from_protection = base_ref
+                .branch_protection_rule
+                .as_ref()
+                .filter(|rule| rule.requires_approving_reviews)
+                .and_then(|rule| rule.required_approving_review_count)
+                .unwrap_or(0);
+            let from_update_rule = base_ref
+                .ref_update_rule
+                .as_ref()
+                .map(|rule| rule.required_approving_review_count)
+                .unwrap_or(0);
+            from_protection.max(from_update_rule)
         }
 
         let body = self.graphql(&Request {
@@ -418,6 +479,17 @@ impl CodeHost for GithubApi {
                     Some("PENDING") | Some("EXPECTED") => CiStatus::Pending,
                     _ => CiStatus::None,
                 };
+                let approvals = node
+                    .latest_opinionated_reviews
+                    .as_ref()
+                    .map(|reviews| {
+                        reviews
+                            .nodes
+                            .iter()
+                            .filter(|review| review.state == "APPROVED")
+                            .count() as u32
+                    })
+                    .unwrap_or(0);
                 PullRequest {
                     id: node.id,
                     title: node.title,
@@ -430,6 +502,8 @@ impl CodeHost for GithubApi {
                         PrStatus::Open
                     },
                     ci,
+                    approvals,
+                    required_approvals: required_approvals(node.base_ref.as_ref()),
                     updated_at: node.updated_at,
                 }
             })
