@@ -120,8 +120,8 @@ impl RenderOnce for Button {
                     super::spinner::Spinner::new(format!("{}-spinner", id)).color(style.text),
                 )
             })
-            .children(label)
-            .when(!is_loading, |this| this.children(icon));
+            .when(!is_loading, |this| this.children(icon))
+            .children(label);
 
         if let Some(on_click) = self.on_click
             && !is_loading
