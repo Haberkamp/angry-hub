@@ -1,13 +1,15 @@
 use std::sync::Arc;
 
-use gpui::{Context, FontWeight, Render, Window, div, prelude::*};
-use gpui_selectable_text::SelectableText;
+use gpui::{ClipboardItem, Context, FontWeight, Render, Window, div, prelude::*, px};
 use rooter::Router;
 
 use crate::color;
 use crate::datasource::code_host;
 use crate::session::Session;
-use crate::ui::Button;
+use crate::ui::{Button, Tooltip};
+
+const OTP_TOOLTIP: &str = "Click to copy";
+const OTP_COPIED_TOOLTIP: &str = "Copied to clipboard";
 
 enum LoginState {
     LoggedOut,
@@ -22,13 +24,23 @@ enum LoginState {
 
 pub struct Login {
     state: LoginState,
+    otp_copied: bool,
+    otp_tooltip_open: bool,
 }
 
 impl Login {
     pub fn new() -> Self {
         Self {
             state: LoginState::LoggedOut,
+            otp_copied: false,
+            otp_tooltip_open: false,
         }
+    }
+
+    fn copy_otp(&mut self, code: &str, cx: &mut Context<Self>) {
+        cx.write_to_clipboard(ClipboardItem::new_string(code.to_string()));
+        self.otp_copied = true;
+        cx.notify();
     }
 
     fn start_login(&mut self, window: &mut Window, cx: &mut Context<Self>) {
@@ -119,11 +131,46 @@ impl Render for Login {
                 user_code,
                 verification_uri,
             } => vec![
-                div()
-                    .text_3xl()
-                    .font_weight(FontWeight::SEMIBOLD)
-                    .child(SelectableText::new("otp-code", user_code.to_string()))
-                    .into_any_element(),
+                Tooltip::new(
+                    "otp-tooltip",
+                    if self.otp_copied {
+                        OTP_COPIED_TOOLTIP
+                    } else {
+                        OTP_TOOLTIP
+                    },
+                )
+                .offset(px(4.0))
+                .open(self.otp_tooltip_open)
+                .on_hover(cx.listener(|this, hovered, _, cx| {
+                    if this.otp_tooltip_open != *hovered {
+                        this.otp_tooltip_open = *hovered;
+                        cx.notify();
+                    }
+                }))
+                .on_close(cx.listener(|this, _, _, cx| {
+                    if this.otp_copied {
+                        this.otp_copied = false;
+                        cx.notify();
+                    }
+                }))
+                .child({
+                    let code = user_code.clone();
+                    let label = user_code.to_string();
+                    div()
+                        .id("otp-code")
+                        .px_3()
+                        .py_1()
+                        .rounded_md()
+                        .text_3xl()
+                        .font_weight(FontWeight::SEMIBOLD)
+                        .cursor_pointer()
+                        .hover(|this| this.bg(color::gray::s3()))
+                        .on_click(cx.listener(move |this, _, _, cx| {
+                            this.copy_otp(&code, cx);
+                        }))
+                        .child(label)
+                })
+                .into_any_element(),
                 Button::new("open-verification", "Open verification page")
                     .on_click(cx.listener({
                         let verification_uri = verification_uri.clone();

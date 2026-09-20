@@ -6,6 +6,7 @@ mod segmented;
 mod select;
 mod spinner;
 mod tab;
+mod tooltip;
 
 pub use avatar::Avatar;
 pub use button::Button;
@@ -15,3 +16,4 @@ pub use segmented::{Segment, SegmentedControl};
 pub use select::{MultiSelect, SelectOption};
 pub use spinner::Spinner;
 pub use tab::Tab;
+pub use tooltip::Tooltip;
