@@ -369,7 +369,7 @@ pub mod status {
 
     pub fn pending(cx: &App) -> Hsla {
         if is_dark(cx) {
-            amber(8, cx)
+            amber(7, cx)
         } else {
             amber(11, cx)
         }
