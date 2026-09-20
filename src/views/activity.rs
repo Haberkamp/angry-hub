@@ -178,7 +178,6 @@ impl Render for Activity {
                                 .px_3()
                                 .rounded_md()
                                 .hover(|this| this.bg(row_hover))
-                                .cursor_pointer()
                                 .on_click(move |_, _window, cx| cx.open_url(&url))
                                 .child(
                                     div()

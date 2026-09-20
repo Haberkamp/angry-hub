@@ -153,7 +153,6 @@ impl RenderOnce for SegmentedControl {
                             .justify_center()
                             .rounded_full()
                             .text_size(px(14.0))
-                            .cursor_pointer()
                             .when(is_selected, |this| this.text_color(selected_text))
                             .when(!is_selected, |this| this.text_color(muted_text))
                             .child(segment.label);

@@ -63,7 +63,6 @@ impl RenderOnce for Tab {
             .bg(bg)
             .hover(|this| this.bg(hover))
             .rounded_full()
-            .cursor_pointer()
             .text_size(px(13.0))
             .text_color(text)
             .child(label);

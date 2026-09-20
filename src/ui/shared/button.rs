@@ -130,9 +130,8 @@ impl RenderOnce for Button {
             .when(!is_loading, |this| {
                 this.hover(move |this| this.bg(style.hover_bg))
                     .active(move |this| this.bg(style.active_bg))
-                    .cursor_pointer()
             })
-            .when(is_loading, |this| this.cursor_default().opacity(0.6))
+            .when(is_loading, |this| this.opacity(0.6))
             .rounded_md()
             .text_color(style.text)
             .when(is_loading, |this| {
