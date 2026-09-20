@@ -1,12 +1,15 @@
+use std::cell::Cell;
+use std::rc::Rc;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
 use crate::color;
 use gpui::{
     AnchoredPositionMode, Animation, AnimationExt as _, AnyElement, App, Bounds, ClickEvent,
-    Corner, Element, ElementId, GlobalElementId, InspectorElementId, InteractiveElement,
+    Corner, Display, Element, ElementId, GlobalElementId, InspectorElementId, InteractiveElement,
     IntoElement, LayoutId, MouseButton, MouseDownEvent, ParentElement, Pixels, RenderOnce,
-    SharedString, Styled, Window, anchored, deferred, div, ease_out_quint, point, prelude::*, px,
+    SharedString, Size, Style, Styled, Window, anchored, deferred, div, ease_out_quint, point,
+    prelude::*, px,
 };
 
 use super::icon::{Icon, IconName};
@@ -139,6 +142,281 @@ impl Element for OpenPresence {
     }
 }
 
+#[derive(Clone, Copy, PartialEq)]
+enum VerticalPlacement {
+    Bottom,
+    Top,
+}
+
+fn resolve_vertical_placement(
+    trigger_bounds: Bounds<Pixels>,
+    popup_height: Pixels,
+    viewport_size: Size<Pixels>,
+    margin: Pixels,
+) -> VerticalPlacement {
+    let available_above = (trigger_bounds.top() - margin).max(px(0.0));
+    let available_below = (viewport_size.height - margin - trigger_bounds.bottom()).max(px(0.0));
+
+    if popup_height <= available_below {
+        VerticalPlacement::Bottom
+    } else if popup_height <= available_above {
+        VerticalPlacement::Top
+    } else if available_below >= available_above {
+        VerticalPlacement::Bottom
+    } else {
+        VerticalPlacement::Top
+    }
+}
+
+fn clamp_to_viewport(
+    mut bounds: Bounds<Pixels>,
+    viewport_size: Size<Pixels>,
+    margin: Pixels,
+) -> Bounds<Pixels> {
+    let right_limit = (viewport_size.width - margin).max(margin);
+    let bottom_limit = (viewport_size.height - margin).max(margin);
+
+    if bounds.right() > right_limit {
+        bounds.origin.x -= bounds.right() - right_limit;
+    }
+    if bounds.left() < margin {
+        bounds.origin.x = margin;
+    }
+    if bounds.bottom() > bottom_limit {
+        bounds.origin.y -= bounds.bottom() - bottom_limit;
+    }
+    if bounds.top() < margin {
+        bounds.origin.y = margin;
+    }
+
+    bounds
+}
+
+struct TriggerAnchor {
+    bounds: Rc<Cell<Bounds<Pixels>>>,
+    child: AnyElement,
+}
+
+impl IntoElement for TriggerAnchor {
+    type Element = Self;
+
+    fn into_element(self) -> Self::Element {
+        self
+    }
+}
+
+impl Element for TriggerAnchor {
+    type RequestLayoutState = AnyElement;
+    type PrepaintState = ();
+
+    fn id(&self) -> Option<ElementId> {
+        None
+    }
+
+    fn source_location(&self) -> Option<&'static core::panic::Location<'static>> {
+        None
+    }
+
+    fn request_layout(
+        &mut self,
+        _global_id: Option<&GlobalElementId>,
+        _inspector_id: Option<&InspectorElementId>,
+        window: &mut Window,
+        cx: &mut App,
+    ) -> (LayoutId, Self::RequestLayoutState) {
+        let mut child = std::mem::replace(&mut self.child, div().into_any_element());
+        (child.request_layout(window, cx), child)
+    }
+
+    fn prepaint(
+        &mut self,
+        _id: Option<&GlobalElementId>,
+        _inspector_id: Option<&InspectorElementId>,
+        bounds: Bounds<Pixels>,
+        child: &mut Self::RequestLayoutState,
+        window: &mut Window,
+        cx: &mut App,
+    ) -> Self::PrepaintState {
+        self.bounds.set(bounds);
+        child.prepaint(window, cx);
+    }
+
+    fn paint(
+        &mut self,
+        _id: Option<&GlobalElementId>,
+        _inspector_id: Option<&InspectorElementId>,
+        _bounds: Bounds<Pixels>,
+        child: &mut Self::RequestLayoutState,
+        _: &mut Self::PrepaintState,
+        window: &mut Window,
+        cx: &mut App,
+    ) {
+        child.paint(window, cx);
+    }
+}
+
+struct MenuPositioner {
+    id: ElementId,
+    trigger_bounds: Rc<Cell<Bounds<Pixels>>>,
+    open: bool,
+    animation_id: SharedString,
+    child: Option<AnyElement>,
+}
+
+struct MenuPositionerState {
+    placement: VerticalPlacement,
+}
+
+struct MenuPositionerLayout {
+    child: AnyElement,
+    child_layout_id: LayoutId,
+    animated_placement: VerticalPlacement,
+}
+
+impl IntoElement for MenuPositioner {
+    type Element = Self;
+
+    fn into_element(self) -> Self::Element {
+        self
+    }
+}
+
+impl Element for MenuPositioner {
+    type RequestLayoutState = MenuPositionerLayout;
+    type PrepaintState = ();
+
+    fn id(&self) -> Option<ElementId> {
+        Some(self.id.clone())
+    }
+
+    fn source_location(&self) -> Option<&'static core::panic::Location<'static>> {
+        None
+    }
+
+    fn request_layout(
+        &mut self,
+        global_id: Option<&GlobalElementId>,
+        _inspector_id: Option<&InspectorElementId>,
+        window: &mut Window,
+        cx: &mut App,
+    ) -> (LayoutId, Self::RequestLayoutState) {
+        window.with_element_state(global_id.unwrap(), |state, window| {
+            let state = state.unwrap_or(MenuPositionerState {
+                placement: VerticalPlacement::Bottom,
+            });
+            let open = self.open;
+            let slide_sign = match state.placement {
+                VerticalPlacement::Bottom => -1.0,
+                VerticalPlacement::Top => 1.0,
+            };
+            let mut child = div()
+                .child(self.child.take().expect("positioner child"))
+                .with_animation(
+                    self.animation_id.clone(),
+                    Animation::new(PANEL_ANIMATION).with_easing(ease_out_quint()),
+                    move |this, delta| {
+                        let t = if open { delta } else { 1.0 - delta };
+                        this.opacity(t)
+                            .top(px(slide_sign * (1.0 - t) * PANEL_SLIDE))
+                    },
+                )
+                .into_any_element();
+            let child_layout_id = child.request_layout(window, cx);
+            let layout_id = window.request_layout(
+                Style {
+                    position: gpui::Position::Absolute,
+                    display: Display::Flex,
+                    ..Style::default()
+                },
+                [child_layout_id],
+                cx,
+            );
+            (
+                (
+                    layout_id,
+                    MenuPositionerLayout {
+                        child,
+                        child_layout_id,
+                        animated_placement: state.placement,
+                    },
+                ),
+                state,
+            )
+        })
+    }
+
+    fn prepaint(
+        &mut self,
+        global_id: Option<&GlobalElementId>,
+        _inspector_id: Option<&InspectorElementId>,
+        bounds: Bounds<Pixels>,
+        layout: &mut Self::RequestLayoutState,
+        window: &mut Window,
+        cx: &mut App,
+    ) -> Self::PrepaintState {
+        let trigger = self.trigger_bounds.get();
+        let child_bounds = window.layout_bounds(layout.child_layout_id);
+        let popup_size = child_bounds.size;
+        let viewport_size = window.viewport_size();
+        let margin = px(PANEL_REST_MARGIN);
+        let mut desired = Bounds {
+            origin: bounds.origin,
+            size: popup_size,
+        };
+        let mut placement = layout.animated_placement;
+        if trigger.size.height > px(0.0) {
+            placement =
+                resolve_vertical_placement(trigger, popup_size.height, viewport_size, margin);
+            desired.origin.x = trigger.right() - popup_size.width;
+            let rest_y = match placement {
+                VerticalPlacement::Bottom => trigger.bottom() + margin,
+                VerticalPlacement::Top => trigger.top() - popup_size.height - margin,
+            };
+            let slide_y = child_bounds.origin.y - bounds.origin.y;
+            desired.origin.y = if placement == layout.animated_placement {
+                rest_y
+            } else {
+                rest_y - slide_y - slide_y
+            };
+            if placement != layout.animated_placement {
+                window.request_animation_frame();
+            }
+        } else {
+            window.request_animation_frame();
+        }
+        desired = clamp_to_viewport(desired, viewport_size, margin);
+
+        window.with_element_state(global_id.unwrap(), |state, _window| {
+            let mut state = state.unwrap_or(MenuPositionerState {
+                placement: VerticalPlacement::Bottom,
+            });
+            state.placement = placement;
+            ((), state)
+        });
+
+        let offset = point(
+            (desired.origin.x - bounds.origin.x).round(),
+            (desired.origin.y - bounds.origin.y).round(),
+        );
+        window.with_element_offset(offset, |window| {
+            layout.child.prepaint(window, cx);
+        });
+    }
+
+    fn paint(
+        &mut self,
+        _id: Option<&GlobalElementId>,
+        _inspector_id: Option<&InspectorElementId>,
+        _bounds: Bounds<Pixels>,
+        layout: &mut Self::RequestLayoutState,
+        _: &mut Self::PrepaintState,
+        window: &mut Window,
+        cx: &mut App,
+    ) {
+        layout.child.paint(window, cx);
+    }
+}
+
 #[derive(IntoElement)]
 pub struct ContextMenu {
     id: SharedString,
@@ -265,11 +543,9 @@ impl RenderOnce for ContextMenu {
             menu_id,
             if open { "enter" } else { "exit" }
         ));
+        let trigger_bounds = Rc::new(Cell::new(Bounds::default()));
         let panel = div()
-            .id(menu_id)
-            .absolute()
-            .top_full()
-            .right_0()
+            .id(menu_id.clone())
             .min_w(px(180.0))
             .flex()
             .flex_col()
@@ -319,29 +595,29 @@ impl RenderOnce for ContextMenu {
                 }
 
                 row
-            }))
-            .with_animation(
-                animation_id,
-                Animation::new(PANEL_ANIMATION).with_easing(ease_out_quint()),
-                move |this, delta| {
-                    let t = if open { delta } else { 1.0 - delta };
-                    this.opacity(t)
-                        .mt(px(PANEL_REST_MARGIN - (1.0 - t) * PANEL_SLIDE))
-                },
-            );
+            }));
 
         div()
             .id(menu_key.clone())
             .relative()
             .flex_none()
-            .child(trigger)
+            .child(TriggerAnchor {
+                bounds: trigger_bounds.clone(),
+                child: trigger.into_any_element(),
+            })
             .child(OpenPresence {
                 id: ElementId::from(SharedString::from(format!("{menu_key}-presence"))),
                 open,
                 child: Some(
                     div()
                         .child(deferred(overlay).with_priority(0))
-                        .child(deferred(panel))
+                        .child(deferred(MenuPositioner {
+                            id: ElementId::from(SharedString::from(format!("{menu_key}-flip"))),
+                            trigger_bounds,
+                            open,
+                            animation_id,
+                            child: Some(panel.into_any_element()),
+                        }))
                         .into_any_element(),
                 ),
             })
