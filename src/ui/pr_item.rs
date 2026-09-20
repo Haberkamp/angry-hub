@@ -25,6 +25,7 @@ pub struct PrItem {
     ci: CiStatus,
     approvals: SharedString,
     required_approvals: SharedString,
+    show_approvals: bool,
     menu_open: bool,
     closing: bool,
     on_toggle_menu: Option<ToggleMenuHandler>,
@@ -69,6 +70,7 @@ impl PrItem {
             ci: pr.ci,
             approvals: pr.approvals.to_string().into(),
             required_approvals: pr.required_approvals.to_string().into(),
+            show_approvals: pr.required_approvals > 0,
             menu_open: false,
             closing: false,
             on_toggle_menu: None,
@@ -181,15 +183,15 @@ impl RenderOnce for PrItem {
                             .ml(px(28.0))
                             .text_size(px(12.0))
                             .text_color(color::gray::s10())
-                            .child(
-                                div()
+                            .child({
+                                let mut meta = div()
                                     .flex()
                                     .items_center()
                                     .gap(px(4.0))
                                     .child(self.repo)
-                                    .child(self.number)
-                                    .child("·")
-                                    .child(
+                                    .child(self.number);
+                                if self.show_approvals {
+                                    meta = meta.child("·").child(
                                         div()
                                             .flex()
                                             .items_center()
@@ -204,8 +206,10 @@ impl RenderOnce for PrItem {
                                                     .child("/")
                                                     .child(self.required_approvals),
                                             ),
-                                    ),
-                            )
+                                    );
+                                }
+                                meta
+                            })
                             .child(CiStatusIcon::new(self.ci)),
                     ),
             )
