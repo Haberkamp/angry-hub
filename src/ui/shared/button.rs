@@ -8,6 +8,7 @@ use gpui::{
 pub enum ButtonVariant {
     #[default]
     Primary,
+    Tertiary,
     Destructive,
 }
 
@@ -20,6 +21,7 @@ pub struct Button {
     icon: Option<super::icon::Icon>,
     variant: ButtonVariant,
     is_loading: bool,
+    full: bool,
     on_click: Option<ClickHandler>,
 }
 
@@ -38,6 +40,12 @@ impl ButtonVariant {
                 hover_bg: color::gray::s11(),
                 active_bg: color::gray::s10(),
                 text: color::gray::s1(),
+            },
+            ButtonVariant::Tertiary => ButtonStyle {
+                bg: color::gray::s1(),
+                hover_bg: color::gray::s3(),
+                active_bg: color::gray::s4(),
+                text: color::gray::s9(),
             },
             ButtonVariant::Destructive => ButtonStyle {
                 bg: color::red::s9(),
@@ -58,6 +66,7 @@ impl Button {
             icon: None,
             variant: ButtonVariant::Primary,
             is_loading: false,
+            full: false,
             on_click: None,
         }
     }
@@ -65,6 +74,10 @@ impl Button {
     pub fn variant(mut self, variant: ButtonVariant) -> Self {
         self.variant = variant;
         self
+    }
+
+    pub fn tertiary(self) -> Self {
+        self.variant(ButtonVariant::Tertiary)
     }
 
     pub fn destructive(self) -> Self {
@@ -78,6 +91,11 @@ impl Button {
 
     pub fn loading(mut self, is_loading: bool) -> Self {
         self.is_loading = is_loading;
+        self
+    }
+
+    pub fn full(mut self) -> Self {
+        self.full = true;
         self
     }
 
@@ -96,6 +114,7 @@ impl RenderOnce for Button {
         let label = self.label.clone();
         let icon = self.icon.clone().map(|icon| icon.color(style.text));
         let is_loading = self.is_loading;
+        let full = self.full;
         let id = self.id.clone();
 
         let mut element = div()
@@ -106,6 +125,7 @@ impl RenderOnce for Button {
             .items_center()
             .justify_center()
             .gap_2()
+            .when(full, |this| this.w_full().flex_1())
             .bg(style.bg)
             .when(!is_loading, |this| {
                 this.hover(move |this| this.bg(style.hover_bg))

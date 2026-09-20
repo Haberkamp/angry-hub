@@ -19,6 +19,7 @@ pub enum IconName {
     Close,
     User,
     MergeConflicts,
+    Github,
 }
 
 impl IconName {
@@ -40,6 +41,7 @@ impl IconName {
             IconName::Close => "icons/x.svg",
             IconName::User => "icons/user.svg",
             IconName::MergeConflicts => "icons/merge_conflicts.svg",
+            IconName::Github => "icons/github.svg",
         }
     }
 }

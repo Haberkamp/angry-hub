@@ -6,7 +6,7 @@ use rooter::Router;
 use crate::color;
 use crate::datasource::code_host;
 use crate::session::Session;
-use crate::ui::{Button, Tooltip};
+use crate::ui::{Button, Icon, IconName, Tooltip};
 
 const OTP_TOOLTIP: &str = "Click to copy";
 const OTP_COPIED_TOOLTIP: &str = "Copied to clipboard";
@@ -72,9 +72,11 @@ impl Login {
                                 Router::navigate_window(window, cx, "/");
                             }
                             Err(e) => {
-                                this.state = LoginState::RequestingCode {
-                                    error: Some(e.message.into()),
-                                };
+                                if matches!(this.state, LoginState::PendingCode { .. }) {
+                                    this.state = LoginState::RequestingCode {
+                                        error: Some(e.message.into()),
+                                    };
+                                }
                             }
                         })
                         .ok();
@@ -101,6 +103,7 @@ impl Render for Login {
         let children: Vec<_> = match &self.state {
             LoginState::LoggedOut => vec![
                 Button::new("login", "Log in with GitHub")
+                    .icon(Icon::new(IconName::Github).size(px(16.0)))
                     .on_click(cx.listener(|this, _, window, cx| this.start_login(window, cx)))
                     .into_any_element(),
             ],
@@ -171,13 +174,34 @@ impl Render for Login {
                         .child(label)
                 })
                 .into_any_element(),
-                Button::new("open-verification", "Open verification page")
-                    .on_click(cx.listener({
-                        let verification_uri = verification_uri.clone();
-                        move |_, _, _, cx| {
-                            cx.open_url(&verification_uri);
-                        }
-                    }))
+                div()
+                    .id("verification-actions")
+                    .w_full()
+                    .max_w(px(280.0))
+                    .flex()
+                    .flex_col()
+                    .gap_2()
+                    .child(
+                        Button::new("open-verification", "Open verification page")
+                            .full()
+                            .on_click(cx.listener({
+                                let verification_uri = verification_uri.clone();
+                                move |_, _, _, cx| {
+                                    cx.open_url(&verification_uri);
+                                }
+                            })),
+                    )
+                    .child(
+                        Button::new("go-back", "Go back")
+                            .tertiary()
+                            .full()
+                            .on_click(cx.listener(|this, _, _, cx| {
+                                this.state = LoginState::LoggedOut;
+                                this.otp_copied = false;
+                                this.otp_tooltip_open = false;
+                                cx.notify();
+                            })),
+                    )
                     .into_any_element(),
             ],
         };
