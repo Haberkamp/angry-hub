@@ -329,6 +329,7 @@ impl CodeHost for GithubApi {
                       nodes { state }
                     }
                     reviewDecision
+                    mergeable
                     baseRef {
                       branchProtectionRule {
                         requiresApprovingReviews
@@ -403,6 +404,7 @@ impl CodeHost for GithubApi {
             latest_opinionated_reviews: Option<ReviewConnection>,
             #[serde(rename = "reviewDecision")]
             review_decision: Option<String>,
+            mergeable: Option<String>,
             #[serde(rename = "baseRef")]
             base_ref: Option<BaseRef>,
         }
@@ -555,6 +557,7 @@ impl CodeHost for GithubApi {
                         node.base_ref.as_ref(),
                         node.review_decision.as_deref(),
                     ),
+                    has_conflicts: node.mergeable.as_deref() == Some("CONFLICTING"),
                     updated_at: node.updated_at,
                 }
             })

@@ -18,6 +18,7 @@ pub enum IconName {
     ChangesRequested,
     Close,
     User,
+    MergeConflicts,
 }
 
 impl IconName {
@@ -38,6 +39,7 @@ impl IconName {
             IconName::ChangesRequested => "icons/changes_requested.svg",
             IconName::Close => "icons/x.svg",
             IconName::User => "icons/user.svg",
+            IconName::MergeConflicts => "icons/merge_conflicts.svg",
         }
     }
 }
