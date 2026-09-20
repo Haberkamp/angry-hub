@@ -7,6 +7,7 @@ mod select;
 mod spinner;
 mod tab;
 mod tooltip;
+mod truncate;
 
 pub use avatar::Avatar;
 pub use button::Button;
@@ -17,3 +18,5 @@ pub use select::{MultiSelect, SelectOption};
 pub use spinner::Spinner;
 pub use tab::Tab;
 pub use tooltip::Tooltip;
+
+pub(crate) use truncate::{list_text_max_width, measure_line, truncate_line};

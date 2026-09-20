@@ -7,7 +7,9 @@ use crate::color;
 use crate::datasource::code_host;
 use crate::model;
 use crate::session::{self, Session};
-use crate::ui::{ActivityKindIcon, Avatar, Button, Spinner};
+use crate::ui::{
+    ActivityKindIcon, Avatar, Button, Spinner, list_text_max_width, measure_line, truncate_line,
+};
 
 enum ActivityState {
     Loading,
@@ -121,10 +123,42 @@ impl Render for Activity {
                         .enumerate()
                         .map(|(ix, item)| {
                             let url = item.url.clone();
-                            let headline = format!("{} {}", item.actor, item.kind.label());
-                            let avatar = item.avatar_url.clone();
+                            let number = format!("#{}", item.number);
+                            let show_avatar = item.kind == model::ActivityKind::Comment;
+                            let prefix = match item.kind {
+                                model::ActivityKind::Merged => "Merged ".to_string(),
+                                model::ActivityKind::Closed => "Closed ".to_string(),
+                                model::ActivityKind::Reopened => "Reopened ".to_string(),
+                                model::ActivityKind::Comment => {
+                                    format!("{} commented on ", item.actor)
+                                }
+                                model::ActivityKind::Approved => {
+                                    format!("{} approved ", item.actor)
+                                }
+                                model::ActivityKind::ChangesRequested => {
+                                    format!("{} requested changes on ", item.actor)
+                                }
+                            };
+                            let extra_reserved = px(20.0) // status icon
+                                + px(8.0) // gap after icon
+                                + if show_avatar {
+                                    px(16.0) + px(4.0)
+                                } else {
+                                    px(0.0)
+                                };
+                            let available = list_text_max_width(window, extra_reserved);
+                            let prefix_width = measure_line(&prefix, window);
+                            let quoted_max = (available - prefix_width).max(px(24.0));
+                            let quoted_title = truncate_line(
+                                format!("\"{}\"", item.pr_title.trim()),
+                                quoted_max,
+                                window,
+                            );
+                            let headline = format!("{prefix}{quoted_title}");
                             div()
                                 .id(("activity", ix))
+                                .w_full()
+                                .min_w_0()
                                 .flex()
                                 .flex_col()
                                 .gap_1()
@@ -139,18 +173,43 @@ impl Render for Activity {
                                         .flex()
                                         .gap_2()
                                         .items_center()
-                                        .text_color(color::gray::s10())
+                                        .min_w_0()
                                         .child(ActivityKindIcon::new(item.kind))
-                                        .child(Avatar::new(avatar).size(px(20.0)))
-                                        .child(div().child(headline))
-                                        .child(div().child(item.repo.clone())),
+                                        .child(
+                                            div()
+                                                .flex_1()
+                                                .flex()
+                                                .items_center()
+                                                .gap(px(4.0))
+                                                .min_w_0()
+                                                .overflow_hidden()
+                                                .text_color(color::gray::s12())
+                                                .when(show_avatar, |this| {
+                                                    this.child(
+                                                        Avatar::new(item.avatar_url.clone())
+                                                            .size(px(16.0)),
+                                                    )
+                                                })
+                                                .child(
+                                                    div()
+                                                        .min_w_0()
+                                                        .overflow_hidden()
+                                                        .whitespace_nowrap()
+                                                        .child(headline),
+                                                ),
+                                        ),
                                 )
                                 .child(
                                     div()
                                         .flex()
-                                        .gap_2()
                                         .items_center()
-                                        .child(div().child(item.pr_title.trim().to_string())),
+                                        .gap(px(4.0))
+                                        .ml(px(28.0))
+                                        .text_size(px(12.0))
+                                        .text_color(color::gray::s10())
+                                        .child(item.repo.clone())
+                                        .child("·")
+                                        .child(number),
                                 )
                         })
                         .map(|el| el.into_any_element())
