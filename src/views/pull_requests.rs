@@ -29,6 +29,7 @@ pub struct PullRequests {
     visibility_menu_open: bool,
     pr_menu_open: Option<String>,
     conflict_tooltip_open: Option<String>,
+    ci_tooltip_open: Option<String>,
     closing_pr: Option<String>,
     refreshing: bool,
     loading: bool,
@@ -54,6 +55,7 @@ impl PullRequests {
             visibility_menu_open: false,
             pr_menu_open: None,
             conflict_tooltip_open: None,
+            ci_tooltip_open: None,
             closing_pr: None,
             refreshing: false,
             loading: false,
@@ -438,6 +440,24 @@ impl Render for PullRequests {
                                         };
                                         if this.conflict_tooltip_open != next {
                                             this.conflict_tooltip_open = next;
+                                            cx.notify();
+                                        }
+                                    }
+                                }))
+                                .ci_tooltip_open(self.ci_tooltip_open.as_deref() == Some(&menu_key))
+                                .on_ci_tooltip_hover(cx.listener({
+                                    let menu_key = menu_key.clone();
+                                    move |this, hovered, _, cx| {
+                                        let next = if *hovered {
+                                            Some(menu_key.clone())
+                                        } else if this.ci_tooltip_open.as_deref() == Some(&menu_key)
+                                        {
+                                            None
+                                        } else {
+                                            this.ci_tooltip_open.clone()
+                                        };
+                                        if this.ci_tooltip_open != next {
+                                            this.ci_tooltip_open = next;
                                             cx.notify();
                                         }
                                     }

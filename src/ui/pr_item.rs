@@ -32,12 +32,15 @@ pub struct PrItem {
     has_conflicts: bool,
     conflict_tooltip_id: SharedString,
     conflict_tooltip_open: bool,
+    ci_tooltip_id: SharedString,
+    ci_tooltip_open: bool,
     menu_open: bool,
     closing: bool,
     on_toggle_menu: Option<ToggleMenuHandler>,
     on_dismiss_menu: Option<DismissMenuHandler>,
     on_close_pr: Option<ClosePrHandler>,
     on_conflict_tooltip_hover: Option<HoverHandler>,
+    on_ci_tooltip_hover: Option<HoverHandler>,
 }
 
 fn truncated_title(title: SharedString, has_conflicts: bool, window: &mut Window) -> SharedString {
@@ -86,12 +89,15 @@ impl PrItem {
             has_conflicts: pr.has_conflicts,
             conflict_tooltip_id: SharedString::from(format!("pr-conflicts-{ix}")),
             conflict_tooltip_open: false,
+            ci_tooltip_id: SharedString::from(format!("pr-ci-{ix}")),
+            ci_tooltip_open: false,
             menu_open: false,
             closing: false,
             on_toggle_menu: None,
             on_dismiss_menu: None,
             on_close_pr: None,
             on_conflict_tooltip_hover: None,
+            on_ci_tooltip_hover: None,
         }
     }
 
@@ -128,6 +134,19 @@ impl PrItem {
 
     pub fn conflict_tooltip_open(mut self, open: bool) -> Self {
         self.conflict_tooltip_open = open;
+        self
+    }
+
+    pub fn ci_tooltip_open(mut self, open: bool) -> Self {
+        self.ci_tooltip_open = open;
+        self
+    }
+
+    pub fn on_ci_tooltip_hover(
+        mut self,
+        listener: impl Fn(&bool, &mut Window, &mut App) + 'static,
+    ) -> Self {
+        self.on_ci_tooltip_hover = Some(Box::new(listener));
         self
     }
 
@@ -262,7 +281,23 @@ impl RenderOnce for PrItem {
                                 }
                                 meta
                             })
-                            .child(CiStatusIcon::new(self.ci)),
+                            .child({
+                                let mut tooltip = Tooltip::new(
+                                    self.ci_tooltip_id,
+                                    match self.ci {
+                                        CiStatus::Success => "CI passed",
+                                        CiStatus::Failure => "CI failed",
+                                        CiStatus::Pending => "CI pending",
+                                        CiStatus::None => "No CI",
+                                    },
+                                )
+                                .open(self.ci_tooltip_open)
+                                .child(CiStatusIcon::new(self.ci));
+                                if let Some(on_hover) = self.on_ci_tooltip_hover {
+                                    tooltip = tooltip.on_hover(on_hover);
+                                }
+                                tooltip
+                            }),
                     ),
             )
             .child(menu)
