@@ -2,6 +2,7 @@ use gpui::{AnyElement, App, Context, Entity, Render, Window, div, prelude::*, px
 use rooter::{Outlet, RouteContext, Router};
 
 use crate::color;
+use crate::layout::INACTIVE_HEADER_OPACITY;
 use crate::ui::{Icon, IconName, Segment, SegmentedControl, Spinner};
 use crate::views::settings::Settings;
 
@@ -59,7 +60,7 @@ pub fn main_layout(
     chrome: Entity<Chrome>,
     settings: Entity<Settings>,
     route: RouteContext,
-    _window: &mut Window,
+    window: &mut Window,
     cx: &mut App,
 ) -> AnyElement {
     let path = route.path();
@@ -72,6 +73,11 @@ pub fn main_layout(
     chrome.update(cx, |chrome, cx| chrome.sync_view(selected, is_settings, cx));
     settings.update(cx, |settings, cx| settings.set_on_page(is_settings, cx));
     let previous_selected = chrome.read(cx).previous_selected.clone();
+    let header_opacity = if window.is_window_active() {
+        1.0
+    } else {
+        INACTIVE_HEADER_OPACITY
+    };
 
     div()
         .id("logged-in")
@@ -110,6 +116,7 @@ pub fn main_layout(
                                         this.style().align_self = Some(gpui::AlignItems::FlexStart);
                                         this
                                     })
+                                    .opacity(header_opacity)
                                     .child(
                                         SegmentedControl::new("main-view")
                                             .segments([
@@ -137,8 +144,13 @@ pub fn main_layout(
 }
 
 impl Render for Chrome {
-    fn render(&mut self, _window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+    fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let on_settings = self.on_settings;
+        let header_opacity = if window.is_window_active() {
+            1.0
+        } else {
+            INACTIVE_HEADER_OPACITY
+        };
         let icon = if on_settings {
             IconName::Close
         } else {
@@ -162,6 +174,7 @@ impl Render for Chrome {
             .flex()
             .items_center()
             .gap_2()
+            .opacity(header_opacity)
             .when(self.refreshing, |this| {
                 this.child(div().id("refreshing").child(Spinner::new("refreshing")))
             })

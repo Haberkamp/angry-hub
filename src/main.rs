@@ -81,6 +81,9 @@ impl AppView {
             color::sync_system_appearance(window, cx);
             cx.notify();
         });
+        let activation_sub = cx.observe_window_activation(window, |_, _, cx| {
+            cx.notify();
+        });
         let bounds_sub = cx.observe_window_bounds(window, |_, window, cx| {
             window_frame::persist(window, cx);
         });
@@ -110,7 +113,7 @@ impl AppView {
             notifications: NotificationList::init(cx),
             focus_handle,
             resize_generation: 0,
-            _subscriptions: vec![appearance_sub, bounds_sub, theme_sub],
+            _subscriptions: vec![appearance_sub, activation_sub, bounds_sub, theme_sub],
         };
         crate::updater::check_on_launch(window, cx);
         this

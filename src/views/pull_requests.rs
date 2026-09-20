@@ -493,6 +493,11 @@ impl Render for PullRequests {
             .flex_col()
             .when(matches!(self.prs, PrsState::Loading), |this| this.flex_1())
             .when(!repo_tabs.is_empty(), |this| {
+                let opacity = if window.is_window_active() {
+                    1.0
+                } else {
+                    crate::layout::INACTIVE_HEADER_OPACITY
+                };
                 this.child(
                     div()
                         .id("repo-tabs")
@@ -502,6 +507,7 @@ impl Render for PullRequests {
                         .gap_2()
                         .pl_3()
                         .pb_4()
+                        .opacity(opacity)
                         .children(repo_tabs),
                 )
             })
