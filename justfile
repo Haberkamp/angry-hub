@@ -3,7 +3,6 @@
 #   - GitHub auth as Haberkamp (write access to Haberkamp/angry-hub)
 #   - Developer ID Application cert for team 7SG72YY7UD
 #   - a notarytool keychain profile (see `just setup-notary`)
-# Version bumps land on main through a PR so required CI checks can pass.
 
 allowed_github_login := "Haberkamp"
 github_repo := "Haberkamp/angry-hub"
@@ -51,27 +50,11 @@ release version: (_assert_release_allowed)
         exit 1
     fi
 
-    git fetch origin
-
     if [[ -n "$(git status --porcelain)" ]]; then
         echo "error: working tree is dirty; commit or stash first" >&2
         git status --porcelain >&2
         exit 1
     fi
-
-    if ! git merge-base --is-ancestor HEAD origin/main || ! git merge-base --is-ancestor origin/main HEAD; then
-        echo "error: HEAD must match origin/main (required CI checks block direct pushes to main)" >&2
-        git status -sb >&2
-        exit 1
-    fi
-
-    branch="release-${version}"
-    if git show-ref --verify --quiet "refs/heads/${branch}" || git ls-remote --exit-code origin "refs/heads/${branch}" >/dev/null 2>&1; then
-        echo "error: branch ${branch} already exists" >&2
-        exit 1
-    fi
-
-    git checkout -b "$branch" origin/main
 
     tmp="$(mktemp)"
     awk -v ver="$version" '
@@ -105,20 +88,6 @@ release version: (_assert_release_allowed)
     }
     mv "$tmp" Cargo.lock
 
-    git add Cargo.toml Cargo.lock
-    git commit -m "Release ${version}"
-    git push -u origin HEAD
-
-    gh pr create --repo "{{github_repo}}" --base main --head "$branch" \
-        --title "Release ${version}" \
-        --body "Bump version to ${version} for the GitHub release."
-    gh pr checks --watch --fail-fast
-    gh pr merge --squash --delete-branch
-
-    git fetch origin
-    git checkout main
-    git merge --ff-only origin/main
-
     host="$(rustc -vV | awk '/^host:/{print $2}')"
     app_dir="target/release/bundle/osx/{{app_name}}.app"
     zip_path="target/release/angry-hub-${host}.zip"
@@ -149,7 +118,10 @@ release version: (_assert_release_allowed)
     rm -f "$zip_path"
     ditto -c -k --keepParent "$app_dir" "$zip_path"
 
+    git add Cargo.toml Cargo.lock
+    git commit -m "Release ${version}"
     git tag -a "$tag" -m "Release ${version}"
+    git push origin HEAD
     git push origin "$tag"
 
     gh release create "$tag" "$zip_path" \
