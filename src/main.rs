@@ -158,6 +158,12 @@ impl Render for AppView {
             .on_action(|_: &app_menus::Minimize, window, _| window.minimize_window())
             .on_action(|_: &app_menus::Zoom, window, _| window.zoom_window())
             .on_action(|_: &app_menus::ToggleFullScreen, window, _| window.toggle_fullscreen())
+            .on_action(|_: &app_menus::ShowPullRequests, window, cx| {
+                Router::navigate_window(window, cx, "/");
+            })
+            .on_action(|_: &app_menus::ShowActivity, window, cx| {
+                Router::navigate_window(window, cx, "/activity");
+            })
             .on_action(|_: &app_menus::CloseWindow, window, cx| {
                 window_frame::persist(window, cx);
                 window.remove_window()
