@@ -49,6 +49,15 @@ const VIOLET_DARK: [u32; 12] = [
     0x7D66D9, 0xBAA7FF, 0xE2DDFE,
 ];
 
+const AMBER_LIGHT: [u32; 12] = [
+    0xFEFDFB, 0xFEFBE9, 0xFFF7C2, 0xFFEE9C, 0xFBE577, 0xF3D673, 0xE9C162, 0xE2A336, 0xFFC53D,
+    0xFFBA18, 0xAB6400, 0x4F3422,
+];
+const AMBER_DARK: [u32; 12] = [
+    0x16120C, 0x1D180F, 0x302008, 0x3F2700, 0x4D3000, 0x5C3D05, 0x714F19, 0x8F6424, 0xFFC53D,
+    0xFFD60A, 0xFFCA16, 0xFFE7B3,
+];
+
 fn step(light: &[u32; 12], dark: &[u32; 12], n: usize, cx: &App) -> Hsla {
     let i = n.saturating_sub(1).min(11);
     h(if is_dark(cx) { dark[i] } else { light[i] })
@@ -72,6 +81,10 @@ fn blue(n: usize, cx: &App) -> Hsla {
 
 fn violet(n: usize, cx: &App) -> Hsla {
     step(&VIOLET_LIGHT, &VIOLET_DARK, n, cx)
+}
+
+fn amber(n: usize, cx: &App) -> Hsla {
+    step(&AMBER_LIGHT, &AMBER_DARK, n, cx)
 }
 
 pub fn white() -> Hsla {
@@ -355,7 +368,11 @@ pub mod status {
     }
 
     pub fn pending(cx: &App) -> Hsla {
-        blue(8, cx)
+        if is_dark(cx) {
+            amber(8, cx)
+        } else {
+            amber(11, cx)
+        }
     }
 
     pub fn none(cx: &App) -> Hsla {
