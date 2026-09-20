@@ -6,6 +6,7 @@ use crate::ui::{Icon, IconName, Segment, SegmentedControl, Spinner};
 use crate::views::settings::Settings;
 
 pub struct Chrome {
+    selected: String,
     previous_selected: String,
     refreshing: bool,
     on_settings: bool,
@@ -14,6 +15,7 @@ pub struct Chrome {
 impl Chrome {
     pub fn new() -> Self {
         Self {
+            selected: "prs".into(),
             previous_selected: "prs".into(),
             refreshing: false,
             on_settings: false,
@@ -27,13 +29,17 @@ impl Chrome {
         }
     }
 
-    fn set_on_settings(&mut self, on_settings: bool, selected: &str, cx: &mut Context<Self>) {
-        if self.on_settings && !on_settings {
-            self.previous_selected = selected.to_string();
-        }
+    fn sync_view(&mut self, selected: &str, on_settings: bool, cx: &mut Context<Self>) {
         if self.on_settings != on_settings {
             self.on_settings = on_settings;
             cx.notify();
+        }
+        if on_settings {
+            return;
+        }
+        if self.selected != selected {
+            self.previous_selected = self.selected.clone();
+            self.selected = selected.to_string();
         }
     }
 }
@@ -52,9 +58,7 @@ pub fn main_layout(
     } else {
         "prs"
     };
-    chrome.update(cx, |chrome, cx| {
-        chrome.set_on_settings(is_settings, selected, cx)
-    });
+    chrome.update(cx, |chrome, cx| chrome.sync_view(selected, is_settings, cx));
     settings.update(cx, |settings, cx| settings.set_on_page(is_settings, cx));
     let previous_selected = chrome.read(cx).previous_selected.clone();
 
@@ -103,21 +107,13 @@ pub fn main_layout(
                                             ])
                                             .selected(selected)
                                             .previous_selected(previous_selected)
-                                            .on_change({
-                                                let chrome = chrome.clone();
-                                                let from = selected.to_string();
-                                                move |id, window, cx| {
-                                                    chrome.update(cx, |chrome, cx| {
-                                                        chrome.previous_selected = from.clone();
-                                                        cx.notify();
-                                                    });
-                                                    let path = if id == "activity" {
-                                                        "/activity"
-                                                    } else {
-                                                        "/"
-                                                    };
-                                                    Router::navigate_window(window, cx, path);
-                                                }
+                                            .on_change(|id, window, cx| {
+                                                let path = if id == "activity" {
+                                                    "/activity"
+                                                } else {
+                                                    "/"
+                                                };
+                                                Router::navigate_window(window, cx, path);
                                             }),
                                     ),
                             )

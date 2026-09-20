@@ -11,6 +11,8 @@ actions!(
         Zoom,
         ToggleFullScreen,
         CloseWindow,
+        ShowPullRequests,
+        ShowActivity,
         Cut,
         Copy,
         Paste,
@@ -30,6 +32,8 @@ pub fn init(cx: &mut App) {
         KeyBinding::new("alt-cmd-h", HideOthers, None),
         KeyBinding::new("cmd-m", Minimize, None),
         KeyBinding::new("cmd-w", CloseWindow, None),
+        KeyBinding::new("cmd-1", ShowPullRequests, None),
+        KeyBinding::new("cmd-2", ShowActivity, None),
         KeyBinding::new("ctrl-cmd-f", ToggleFullScreen, None),
         KeyBinding::new("cmd-x", Cut, None),
         KeyBinding::new("cmd-c", Copy, None),
@@ -62,7 +66,12 @@ pub fn init(cx: &mut App) {
         },
         Menu {
             name: "View".into(),
-            items: vec![MenuItem::action("Enter Full Screen", ToggleFullScreen)],
+            items: vec![
+                MenuItem::action("Pull Requests", ShowPullRequests),
+                MenuItem::action("Activity", ShowActivity),
+                MenuItem::separator(),
+                MenuItem::action("Enter Full Screen", ToggleFullScreen),
+            ],
         },
         Menu {
             name: "Window".into(),
