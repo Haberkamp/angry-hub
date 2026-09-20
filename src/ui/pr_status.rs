@@ -78,7 +78,7 @@ impl ActivityKindIcon {
             ActivityKind::Reopened => IconName::PullRequest,
             ActivityKind::Comment => IconName::Comment,
             ActivityKind::Approved => IconName::CiCheck,
-            ActivityKind::ChangesRequested => IconName::CiX,
+            ActivityKind::ChangesRequested => IconName::ChangesRequested,
         }
     }
 }

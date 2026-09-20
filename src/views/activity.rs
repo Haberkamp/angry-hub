@@ -124,7 +124,12 @@ impl Render for Activity {
                         .map(|(ix, item)| {
                             let url = item.url.clone();
                             let number = format!("#{}", item.number);
-                            let show_avatar = item.kind == model::ActivityKind::Comment;
+                            let show_avatar = matches!(
+                                item.kind,
+                                model::ActivityKind::Comment
+                                    | model::ActivityKind::Approved
+                                    | model::ActivityKind::ChangesRequested
+                            );
                             let prefix = match item.kind {
                                 model::ActivityKind::Merged => "Merged ".to_string(),
                                 model::ActivityKind::Closed => "Closed ".to_string(),
