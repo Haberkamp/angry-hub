@@ -5,9 +5,9 @@ use std::sync::Arc;
 use std::time::{Duration, Instant};
 
 use gpui::{
-    App, Application, AssetSource, Bounds, Context, FocusHandle, MouseDownEvent, Render, Result,
-    SharedString, Subscription, TitlebarOptions, Window, WindowBounds, WindowOptions, div,
-    ease_in_out, prelude::*, px, size,
+    App, Application, AssetSource, Context, FocusHandle, MouseDownEvent, Render, Result,
+    SharedString, Subscription, TitlebarOptions, Window, WindowOptions, div, ease_in_out,
+    prelude::*, px, size,
 };
 use rooter::Router;
 
@@ -24,6 +24,7 @@ mod session;
 mod ui;
 mod updater;
 mod views;
+mod window_frame;
 
 use datasource::code_host;
 use session::Session;
@@ -33,7 +34,6 @@ use views::login::Login;
 use views::pull_requests::PullRequests;
 use views::settings::Settings;
 
-const DEFAULT_WINDOW_SIZE: gpui::Size<gpui::Pixels> = size(px(800.0), px(600.0));
 const RESTORE_ANIMATION: Duration = Duration::from_millis(250);
 
 struct Assets {
@@ -78,6 +78,9 @@ impl AppView {
             color::sync_system_appearance(window, cx);
             cx.notify();
         });
+        let bounds_sub = cx.observe_window_bounds(window, |_, window, _cx| {
+            window_frame::persist(window);
+        });
         let theme_sub = cx.observe_global::<color::Theme>(|_, cx| cx.notify());
         let login = cx.new(|_| Login::new());
         let chrome = cx.new(|_| layout::Chrome::new());
@@ -95,7 +98,7 @@ impl AppView {
             notifications: NotificationList::init(cx),
             focus_handle,
             resize_generation: 0,
-            _subscriptions: vec![appearance_sub, theme_sub],
+            _subscriptions: vec![appearance_sub, bounds_sub, theme_sub],
         };
         crate::updater::check_on_launch(window, cx);
         this
@@ -103,7 +106,7 @@ impl AppView {
 
     fn animate_restore_window(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         let from = window.viewport_size();
-        let to = DEFAULT_WINDOW_SIZE;
+        let to = window_frame::DEFAULT_WINDOW_SIZE;
         if from == to {
             return;
         }
@@ -155,7 +158,10 @@ impl Render for AppView {
             .on_action(|_: &app_menus::Minimize, window, _| window.minimize_window())
             .on_action(|_: &app_menus::Zoom, window, _| window.zoom_window())
             .on_action(|_: &app_menus::ToggleFullScreen, window, _| window.toggle_fullscreen())
-            .on_action(|_: &app_menus::CloseWindow, window, _| window.remove_window())
+            .on_action(|_: &app_menus::CloseWindow, window, _| {
+                window_frame::persist(window);
+                window.remove_window()
+            })
             .on_mouse_down(
                 gpui::MouseButton::Left,
                 cx.listener(|this, event: &MouseDownEvent, window, cx| {
@@ -185,12 +191,8 @@ fn asset_base() -> PathBuf {
 pub(crate) fn open_main_window(cx: &mut App) {
     cx.open_window(
         WindowOptions {
-            window_bounds: Some(WindowBounds::Windowed(Bounds::centered(
-                None,
-                DEFAULT_WINDOW_SIZE,
-                cx,
-            ))),
-            window_min_size: Some(size(px(480.0), px(600.0))),
+            window_bounds: Some(window_frame::restored_bounds(cx)),
+            window_min_size: Some(window_frame::MIN_WINDOW_SIZE),
             titlebar: Some(TitlebarOptions {
                 appears_transparent: true,
                 ..Default::default()
