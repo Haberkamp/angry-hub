@@ -23,6 +23,8 @@ pub struct PrItem {
     url: SharedString,
     status: PrStatus,
     ci: CiStatus,
+    approvals: SharedString,
+    required_approvals: SharedString,
     menu_open: bool,
     closing: bool,
     on_toggle_menu: Option<ToggleMenuHandler>,
@@ -65,6 +67,8 @@ impl PrItem {
             url: pr.url.clone().into(),
             status: pr.status().clone(),
             ci: pr.ci,
+            approvals: pr.approvals.to_string().into(),
+            required_approvals: pr.required_approvals.to_string().into(),
             menu_open: false,
             closing: false,
             on_toggle_menu: None,
@@ -184,7 +188,24 @@ impl RenderOnce for PrItem {
                                     .gap(px(4.0))
                                     .child(self.repo)
                                     .child("·")
-                                    .child(self.number),
+                                    .child(self.number)
+                                    .child("·")
+                                    .child(
+                                        div()
+                                            .flex()
+                                            .items_center()
+                                            .gap(px(4.0))
+                                            .child("Approvals")
+                                            .child(
+                                                div()
+                                                    .flex()
+                                                    .items_center()
+                                                    .gap(px(2.0))
+                                                    .child(self.approvals)
+                                                    .child("/")
+                                                    .child(self.required_approvals),
+                                            ),
+                                    ),
                             )
                             .child(CiStatusIcon::new(self.ci)),
                     ),
