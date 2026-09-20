@@ -12,21 +12,30 @@ const SHOW_DURATION: Duration = Duration::from_millis(2500);
 const PANEL_ANIMATION: Duration = Duration::from_millis(180);
 const PANEL_SLIDE: f32 = 12.0;
 const FALLBACK_TOAST_HEIGHT: f32 = 36.0;
+const WIGGLE_DURATION: Duration = Duration::from_millis(420);
+const WIGGLE_AMPLITUDE: f32 = 5.0;
 
 #[derive(Clone)]
 pub struct Notification {
     message: SharedString,
+    key: Option<SharedString>,
 }
 
 impl Notification {
     pub fn new() -> Self {
         Self {
             message: SharedString::default(),
+            key: None,
         }
     }
 
     pub fn message(mut self, message: impl Into<SharedString>) -> Self {
         self.message = message.into();
+        self
+    }
+
+    pub fn key(mut self, key: impl Into<SharedString>) -> Self {
+        self.key = Some(key.into());
         self
     }
 }
@@ -51,10 +60,13 @@ impl From<SharedString> for Notification {
 
 struct ActiveNotification {
     id: u64,
+    key: Option<SharedString>,
     message: SharedString,
+    generation: u64,
     closing: bool,
     created_at: Instant,
     closing_since: Option<Instant>,
+    wiggle_at: Option<Instant>,
 }
 
 pub struct NotificationList {
@@ -77,36 +89,71 @@ impl NotificationList {
     }
 
     fn push(&mut self, notification: Notification, window: &mut Window, cx: &mut Context<Self>) {
+        if let Some(existing) = self
+            .items
+            .iter_mut()
+            .find(|item| notification.key.is_some() && item.key == notification.key)
+        {
+            existing.message = notification.message;
+            existing.generation += 1;
+            existing.closing = false;
+            existing.closing_since = None;
+            existing.wiggle_at = Some(Instant::now());
+            let id = existing.id;
+            let generation = existing.generation;
+            cx.notify();
+            self.schedule_dismiss(id, generation, window, cx);
+            return;
+        }
+
         let id = self.next_id;
         self.next_id += 1;
         self.items.push(ActiveNotification {
             id,
+            key: notification.key,
             message: notification.message,
+            generation: 0,
             closing: false,
             created_at: Instant::now(),
             closing_since: None,
+            wiggle_at: None,
         });
         cx.notify();
+        self.schedule_dismiss(id, 0, window, cx);
+    }
 
+    fn schedule_dismiss(
+        &mut self,
+        id: u64,
+        generation: u64,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
         cx.spawn_in(window, async move |this, cx| {
             Timer::after(SHOW_DURATION).await;
-            this.update(cx, |this, cx| this.begin_dismiss(id, cx)).ok();
+            this.update(cx, |this, cx| this.begin_dismiss(id, generation, cx))
+                .ok();
             Timer::after(PANEL_ANIMATION).await;
-            this.update(cx, |this, cx| this.remove(id, cx)).ok();
+            this.update(cx, |this, cx| this.remove(id, generation, cx))
+                .ok();
         })
         .detach();
     }
 
-    fn begin_dismiss(&mut self, id: u64, cx: &mut Context<Self>) {
+    fn begin_dismiss(&mut self, id: u64, generation: u64, cx: &mut Context<Self>) {
         if let Some(item) = self.items.iter_mut().find(|item| item.id == id) {
+            if item.generation != generation {
+                return;
+            }
             item.closing = true;
             item.closing_since = Some(Instant::now());
             cx.notify();
         }
     }
 
-    fn remove(&mut self, id: u64, cx: &mut Context<Self>) {
-        self.items.retain(|item| item.id != id);
+    fn remove(&mut self, id: u64, generation: u64, cx: &mut Context<Self>) {
+        self.items
+            .retain(|item| item.id != id || item.generation != generation);
         cx.notify();
     }
 }
@@ -147,6 +194,7 @@ impl Render for NotificationList {
                     id: item.id,
                     created_at: item.created_at,
                     closing_since: item.closing_since,
+                    wiggle_at: item.wiggle_at,
                     child: div()
                         .id(SharedString::from(format!("notification-{}", item.id)))
                         .flex_shrink_0()
@@ -178,6 +226,7 @@ struct StackToast {
     id: u64,
     created_at: Instant,
     closing_since: Option<Instant>,
+    wiggle_at: Option<Instant>,
     child: AnyElement,
 }
 
@@ -220,7 +269,7 @@ impl Element for StackToast {
         window: &mut Window,
         cx: &mut App,
     ) -> (LayoutId, Self::RequestLayoutState) {
-        if toast_still_animating(self.created_at, self.closing_since) {
+        if toast_still_animating(self.created_at, self.closing_since, self.wiggle_at) {
             window.request_animation_frame();
         }
 
@@ -288,7 +337,10 @@ impl Element for StackToast {
                         .map_or(height, |previous| previous.max(height)),
                 );
             }
-            layout.child.prepaint(window, cx);
+            let offset = Point::new(px(0.0), px(wiggle_offset(self.wiggle_at)));
+            window.with_element_offset(offset, |window| {
+                layout.child.prepaint(window, cx);
+            });
             ((), state)
         });
     }
@@ -315,9 +367,25 @@ fn size_factor(created_at: Instant, closing_since: Option<Instant>) -> f32 {
     }
 }
 
-fn toast_still_animating(created_at: Instant, closing_since: Option<Instant>) -> bool {
+fn toast_still_animating(
+    created_at: Instant,
+    closing_since: Option<Instant>,
+    wiggle_at: Option<Instant>,
+) -> bool {
     let t = size_factor(created_at, closing_since);
-    t < 1.0
+    t < 1.0 || wiggle_offset(wiggle_at) != 0.0
+}
+
+fn wiggle_offset(wiggle_at: Option<Instant>) -> f32 {
+    let Some(start) = wiggle_at else {
+        return 0.0;
+    };
+    let t = (start.elapsed().as_secs_f32() / WIGGLE_DURATION.as_secs_f32()).clamp(0.0, 1.0);
+    if t >= 1.0 {
+        return 0.0;
+    }
+    let decay = 1.0 - t;
+    (t * std::f32::consts::PI * 4.0).sin() * WIGGLE_AMPLITUDE * decay
 }
 
 fn eased_progress(start: Instant, duration: Duration) -> f32 {
