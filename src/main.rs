@@ -65,6 +65,9 @@ impl AssetSource for Assets {
 
 struct AppView {
     router: gpui::Entity<Router>,
+    chrome: gpui::Entity<layout::Chrome>,
+    pull_requests: gpui::Entity<PullRequests>,
+    activity: gpui::Entity<Activity>,
     notifications: gpui::Entity<NotificationList>,
     focus_handle: FocusHandle,
     resize_generation: u64,
@@ -93,8 +96,17 @@ impl AppView {
             router: Router::attach(
                 window,
                 cx,
-                routes::routes(login, pull_requests, activity, settings, chrome),
+                routes::routes(
+                    login,
+                    pull_requests.clone(),
+                    activity.clone(),
+                    settings,
+                    chrome.clone(),
+                ),
             ),
+            chrome,
+            pull_requests,
+            activity,
             notifications: NotificationList::init(cx),
             focus_handle,
             resize_generation: 0,
@@ -167,6 +179,15 @@ impl Render for AppView {
             .on_action(|_: &app_menus::ShowSettings, window, cx| {
                 Router::navigate_window(window, cx, "/settings");
             })
+            .on_action(cx.listener(|this, _: &app_menus::Refresh, window, cx| {
+                if this.chrome.read(cx).on_settings() {
+                    return;
+                }
+                this.pull_requests
+                    .update(cx, |prs, cx| prs.refresh_prs(window, cx));
+                this.activity
+                    .update(cx, |activity, cx| activity.refresh_activity(window, cx));
+            }))
             .on_action(|_: &app_menus::CloseWindow, window, cx| {
                 window_frame::persist(window, cx);
                 window.remove_window()

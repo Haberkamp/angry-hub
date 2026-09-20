@@ -22,6 +22,10 @@ impl Chrome {
         }
     }
 
+    pub fn on_settings(&self) -> bool {
+        self.on_settings
+    }
+
     pub fn set_refreshing(&mut self, refreshing: bool, cx: &mut Context<Self>) {
         if self.refreshing != refreshing {
             self.refreshing = refreshing;
@@ -33,6 +37,7 @@ impl Chrome {
         let leaving_settings = self.on_settings && !on_settings;
         if self.on_settings != on_settings {
             self.on_settings = on_settings;
+            crate::app_menus::set_menus(cx, !on_settings);
             cx.notify();
         }
         if on_settings {

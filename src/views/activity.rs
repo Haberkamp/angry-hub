@@ -58,6 +58,10 @@ impl Activity {
         .detach();
     }
 
+    pub(crate) fn refresh_activity(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        self.fetch_activity(window, cx);
+    }
+
     fn fetch_activity(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         if self.fetch_in_flight || !cx.global::<Session>().logged_in {
             return;
