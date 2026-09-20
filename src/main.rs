@@ -161,7 +161,6 @@ fn main() {
             if let Ok(http) = crate::http::GpuiReqwestClient::new() {
                 cx.set_http_client(Arc::new(http));
             }
-            gpui_selectable_text::register_keyboard_bridge(cx).detach();
             cx.set_global(Session {
                 logged_in: code_host().has_saved_session(),
             });

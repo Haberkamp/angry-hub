@@ -35,11 +35,11 @@ impl ButtonVariant {
     fn style(self) -> ButtonStyle {
         match self {
             ButtonVariant::Primary => ButtonStyle {
-                bg: color::gray::s2(),
-                hover_bg: color::gray::s4(),
-                active_bg: color::gray::s5(),
-                border: Some(color::gray::s8()),
-                text: color::gray::s12(),
+                bg: color::gray::s12(),
+                hover_bg: color::gray::s11(),
+                active_bg: color::gray::s10(),
+                border: None,
+                text: color::gray::s1(),
             },
             ButtonVariant::Tertiary => ButtonStyle {
                 bg: color::gray::s1(),
@@ -120,7 +120,9 @@ impl RenderOnce for Button {
             .text_color(style.text)
             .children(icon)
             .when(is_loading, |this| {
-                this.child(super::spinner::Spinner::new(format!("{}-spinner", id)))
+                this.child(
+                    super::spinner::Spinner::new(format!("{}-spinner", id)).color(style.text),
+                )
             })
             .children(label);
 
