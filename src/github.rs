@@ -328,6 +328,7 @@ impl CodeHost for GithubApi {
                     latestOpinionatedReviews(first: 40, writersOnly: true) {
                       nodes { state }
                     }
+                    reviewDecision
                     baseRef {
                       branchProtectionRule {
                         requiresApprovingReviews
@@ -335,6 +336,15 @@ impl CodeHost for GithubApi {
                       }
                       refUpdateRule {
                         requiredApprovingReviewCount
+                      }
+                      rules(first: 50) {
+                        nodes {
+                          parameters {
+                            ... on PullRequestParameters {
+                              requiredApprovingReviewCount
+                            }
+                          }
+                        }
                       }
                     }
                   }
@@ -391,6 +401,8 @@ impl CodeHost for GithubApi {
             status_check_rollup: Option<StatusCheckRollup>,
             #[serde(rename = "latestOpinionatedReviews")]
             latest_opinionated_reviews: Option<ReviewConnection>,
+            #[serde(rename = "reviewDecision")]
+            review_decision: Option<String>,
             #[serde(rename = "baseRef")]
             base_ref: Option<BaseRef>,
         }
@@ -417,6 +429,7 @@ impl CodeHost for GithubApi {
             branch_protection_rule: Option<BranchProtectionRule>,
             #[serde(rename = "refUpdateRule")]
             ref_update_rule: Option<RefUpdateRule>,
+            rules: Option<RuleConnection>,
         }
         #[derive(Deserialize)]
         struct BranchProtectionRule {
@@ -428,25 +441,60 @@ impl CodeHost for GithubApi {
         #[derive(Deserialize)]
         struct RefUpdateRule {
             #[serde(rename = "requiredApprovingReviewCount")]
-            required_approving_review_count: u32,
+            required_approving_review_count: Option<u32>,
+        }
+        #[derive(Deserialize)]
+        struct RuleConnection {
+            nodes: Vec<RepositoryRule>,
+        }
+        #[derive(Deserialize)]
+        struct RepositoryRule {
+            parameters: Option<PullRequestRuleParameters>,
+        }
+        #[derive(Deserialize)]
+        struct PullRequestRuleParameters {
+            #[serde(rename = "requiredApprovingReviewCount")]
+            required_approving_review_count: Option<u32>,
         }
 
-        fn required_approvals(base_ref: Option<&BaseRef>) -> u32 {
-            let Some(base_ref) = base_ref else {
-                return 0;
-            };
-            let from_protection = base_ref
-                .branch_protection_rule
-                .as_ref()
-                .filter(|rule| rule.requires_approving_reviews)
-                .and_then(|rule| rule.required_approving_review_count)
+        fn required_approvals(base_ref: Option<&BaseRef>, review_decision: Option<&str>) -> u32 {
+            let from_rules = base_ref
+                .map(|base_ref| {
+                    let from_protection = base_ref
+                        .branch_protection_rule
+                        .as_ref()
+                        .filter(|rule| rule.requires_approving_reviews)
+                        .and_then(|rule| rule.required_approving_review_count)
+                        .unwrap_or(0);
+                    let from_update_rule = base_ref
+                        .ref_update_rule
+                        .as_ref()
+                        .and_then(|rule| rule.required_approving_review_count)
+                        .unwrap_or(0);
+                    let from_rulesets = base_ref
+                        .rules
+                        .as_ref()
+                        .map(|rules| {
+                            rules
+                                .nodes
+                                .iter()
+                                .filter_map(|rule| {
+                                    rule.parameters
+                                        .as_ref()
+                                        .and_then(|p| p.required_approving_review_count)
+                                })
+                                .max()
+                                .unwrap_or(0)
+                        })
+                        .unwrap_or(0);
+                    from_protection.max(from_update_rule).max(from_rulesets)
+                })
                 .unwrap_or(0);
-            let from_update_rule = base_ref
-                .ref_update_rule
-                .as_ref()
-                .map(|rule| rule.required_approving_review_count)
-                .unwrap_or(0);
-            from_protection.max(from_update_rule)
+            if from_rules == 0 && review_decision == Some("REVIEW_REQUIRED") {
+                1
+            } else {
+                from_rules
+            }
         }
 
         let body = self.graphql(&Request {
@@ -503,7 +551,10 @@ impl CodeHost for GithubApi {
                     },
                     ci,
                     approvals,
-                    required_approvals: required_approvals(node.base_ref.as_ref()),
+                    required_approvals: required_approvals(
+                        node.base_ref.as_ref(),
+                        node.review_decision.as_deref(),
+                    ),
                     updated_at: node.updated_at,
                 }
             })
