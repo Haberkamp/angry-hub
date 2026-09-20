@@ -189,7 +189,6 @@ impl Render for Chrome {
                     .bg(rest_bg)
                     .hover(|this| this.bg(hover_bg))
                     .active(|this| this.bg(active_bg))
-                    .cursor_pointer()
                     .rounded_full()
                     .child(Icon::new(icon).size(px(20.0)).color(icon_color))
                     .on_click(move |_, window, cx| {

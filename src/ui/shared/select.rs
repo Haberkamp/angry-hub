@@ -225,7 +225,6 @@ impl RenderOnce for MultiSelect {
             .bg(trigger_bg)
             .hover(|this| this.bg(trigger_hover))
             .rounded_full()
-            .cursor_pointer()
             .child(
                 Icon::new(IconName::ChevronDown)
                     .size(px(14.0))
@@ -294,7 +293,6 @@ impl RenderOnce for MultiSelect {
                             .flex()
                             .items_center()
                             .gap_2()
-                            .cursor_pointer()
                             .hover(|this| this.bg(row_hover))
                             .child(
                                 div()

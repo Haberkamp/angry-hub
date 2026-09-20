@@ -502,7 +502,6 @@ impl RenderOnce for ContextMenu {
             .when(open, |this| this.bg(trigger_active))
             .hover(|this| this.bg(trigger_active))
             .rounded_full()
-            .cursor_pointer()
             .when(!open, |this| {
                 let this = this.opacity(0.0);
                 if let Some(group) = self.hover_group.clone() {
@@ -566,10 +565,7 @@ impl RenderOnce for ContextMenu {
                     .items_center()
                     .justify_between()
                     .gap_3()
-                    .when(!loading, |this| {
-                        this.cursor_pointer().hover(|this| this.bg(row_hover))
-                    })
-                    .when(loading, |this| this.cursor_default())
+                    .when(!loading, |this| this.hover(|this| this.bg(row_hover)))
                     .child(
                         div()
                             .text_size(px(13.0))

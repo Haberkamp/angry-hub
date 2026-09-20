@@ -204,7 +204,6 @@ impl RenderOnce for PrItem {
                     .gap_1()
                     .min_w_0()
                     .id(self.open_id)
-                    .cursor_pointer()
                     .on_click(move |_, _window, cx| cx.open_url(&url))
                     .child(
                         div()

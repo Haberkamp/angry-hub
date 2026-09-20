@@ -158,7 +158,6 @@ impl Render for Login {
                         .rounded_md()
                         .text_3xl()
                         .font_weight(FontWeight::SEMIBOLD)
-                        .cursor_pointer()
                         .hover(|this| this.bg(otp_hover))
                         .on_click(cx.listener(move |this, _, _, cx| {
                             this.copy_otp(&code, cx);
