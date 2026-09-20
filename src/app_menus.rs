@@ -14,6 +14,7 @@ actions!(
         ShowPullRequests,
         ShowActivity,
         ShowSettings,
+        Refresh,
         Cut,
         Copy,
         Paste,
@@ -36,12 +37,28 @@ pub fn init(cx: &mut App) {
         KeyBinding::new("cmd-1", ShowPullRequests, None),
         KeyBinding::new("cmd-2", ShowActivity, None),
         KeyBinding::new("cmd-,", ShowSettings, None),
+        KeyBinding::new("cmd-r", Refresh, None),
         KeyBinding::new("ctrl-cmd-f", ToggleFullScreen, None),
         KeyBinding::new("cmd-x", Cut, None),
         KeyBinding::new("cmd-c", Copy, None),
         KeyBinding::new("cmd-v", Paste, None),
         KeyBinding::new("cmd-a", SelectAll, None),
     ]);
+
+    set_menus(cx, true);
+}
+
+pub fn set_menus(cx: &App, include_refresh: bool) {
+    let mut view_items = vec![
+        MenuItem::action("Pull Requests", ShowPullRequests),
+        MenuItem::action("Activity", ShowActivity),
+        MenuItem::separator(),
+    ];
+    if include_refresh {
+        view_items.push(MenuItem::action("Refresh", Refresh));
+        view_items.push(MenuItem::separator());
+    }
+    view_items.push(MenuItem::action("Enter Full Screen", ToggleFullScreen));
 
     cx.set_menus(vec![
         Menu {
@@ -70,12 +87,7 @@ pub fn init(cx: &mut App) {
         },
         Menu {
             name: "View".into(),
-            items: vec![
-                MenuItem::action("Pull Requests", ShowPullRequests),
-                MenuItem::action("Activity", ShowActivity),
-                MenuItem::separator(),
-                MenuItem::action("Enter Full Screen", ToggleFullScreen),
-            ],
+            items: view_items,
         },
         Menu {
             name: "Window".into(),

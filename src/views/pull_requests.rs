@@ -98,7 +98,7 @@ impl PullRequests {
             .update(cx, |chrome, cx| chrome.set_refreshing(show, cx));
     }
 
-    fn refresh_prs(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+    pub(crate) fn refresh_prs(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         self.refreshing = true;
         self.sync_refresh_indicator(cx);
         self.fetch_prs(window, cx);
