@@ -20,6 +20,11 @@ setup:
 run *args:
     ANGRY_HUB_DISABLE_AUTO_UPDATE=1 cargo run {{args}}
 
+# Build the .app and embed the Icon Composer Tahoe icon (Assets.car).
+bundle:
+    cargo bundle --release --format osx
+    bash scripts/embed-app-icon.sh
+
 # Format Rust sources.
 fmt:
     cargo fmt --all
@@ -100,7 +105,7 @@ release version: (_assert_release_allowed)
     app_dir="target/release/bundle/osx/{{app_name}}.app"
     zip_path="target/release/angry-hub-${host}.zip"
 
-    cargo bundle --release --format osx
+    just bundle
 
     if [[ ! -d "$app_dir" ]]; then
         echo "error: expected bundle at $app_dir" >&2
