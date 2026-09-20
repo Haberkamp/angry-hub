@@ -187,7 +187,6 @@ impl RenderOnce for PrItem {
                                     .items_center()
                                     .gap(px(4.0))
                                     .child(self.repo)
-                                    .child("·")
                                     .child(self.number)
                                     .child("·")
                                     .child(

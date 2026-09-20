@@ -208,7 +208,6 @@ impl Render for Activity {
                                         .text_size(px(12.0))
                                         .text_color(color::gray::s10())
                                         .child(item.repo.clone())
-                                        .child("·")
                                         .child(number),
                                 )
                         })
