@@ -12,6 +12,14 @@ app_name := "Angry Hub"
 bundle_identifier := "dev.haberkamp.angryhub"
 entitlements := "assets/macos/entitlements.plist"
 
+# Install rustfmt and clippy for local development.
+setup:
+    rustup component add rustfmt clippy
+
+# Run the app with auto-update disabled.
+run *args:
+    ANGRY_HUB_DISABLE_AUTO_UPDATE=1 cargo run {{args}}
+
 # Format Rust sources.
 fmt:
     cargo fmt --all
