@@ -446,6 +446,7 @@ impl CodeHost for GithubApi {
                 pullRequests(first: $perPage, states: [OPEN, MERGED, CLOSED], orderBy: { field: UPDATED_AT, direction: DESC }) {
                   nodes {
                     title
+                    number
                     url
                     mergedAt
                     mergedBy {
@@ -564,6 +565,7 @@ impl CodeHost for GithubApi {
         #[derive(Deserialize)]
         struct PullRequestNode {
             title: String,
+            number: u32,
             url: String,
             #[serde(rename = "mergedAt")]
             merged_at: Option<String>,
@@ -663,6 +665,7 @@ impl CodeHost for GithubApi {
                     avatar_url: pr.merged_by.as_ref().map(|a| a.avatar_url.clone()),
                     pr_title: pr.title.clone(),
                     repo: pr.repository.name_with_owner.clone(),
+                    number: pr.number,
                     url: pr.url.clone(),
                     occurred_at: merged_at,
                 });
@@ -692,6 +695,7 @@ impl CodeHost for GithubApi {
                     avatar_url: event.actor.as_ref().map(|a| a.avatar_url.clone()),
                     pr_title: pr.title.clone(),
                     repo: pr.repository.name_with_owner.clone(),
+                    number: pr.number,
                     url: pr.url.clone(),
                     occurred_at,
                 });
@@ -710,6 +714,7 @@ impl CodeHost for GithubApi {
                     avatar_url: Some(author.avatar_url),
                     pr_title: pr.title.clone(),
                     repo: pr.repository.name_with_owner.clone(),
+                    number: pr.number,
                     url: comment.url,
                     occurred_at: comment.created_at,
                 });
@@ -738,6 +743,7 @@ impl CodeHost for GithubApi {
                             avatar_url: review.author.as_ref().map(|a| a.avatar_url.clone()),
                             pr_title: pr.title.clone(),
                             repo: pr.repository.name_with_owner.clone(),
+                            number: pr.number,
                             url: review.url.clone(),
                             occurred_at: submitted_at,
                         });
@@ -757,6 +763,7 @@ impl CodeHost for GithubApi {
                         avatar_url: Some(author.avatar_url),
                         pr_title: pr.title.clone(),
                         repo: pr.repository.name_with_owner.clone(),
+                        number: pr.number,
                         url: comment.url,
                         occurred_at: comment.created_at,
                     });

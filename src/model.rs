@@ -23,7 +23,7 @@ impl PrStatus {
         match self {
             PrStatus::Open => crate::color::green::s9(),
             PrStatus::Draft => crate::color::gray::s9(),
-            PrStatus::Closed => crate::color::gray::s10(),
+            PrStatus::Closed => crate::color::red::s9(),
             PrStatus::Merged => crate::color::violet::s11(),
         }
     }
@@ -80,6 +80,7 @@ pub enum ActivityKind {
 }
 
 impl ActivityKind {
+    #[allow(dead_code)]
     pub fn label(&self) -> &'static str {
         match self {
             ActivityKind::Merged => "merged",
@@ -94,7 +95,7 @@ impl ActivityKind {
     pub fn color(&self) -> gpui::Hsla {
         match self {
             ActivityKind::Merged => crate::color::violet::s11(),
-            ActivityKind::Closed => crate::color::gray::s10(),
+            ActivityKind::Closed => crate::color::red::s9(),
             ActivityKind::Reopened => crate::color::green::s9(),
             ActivityKind::Comment => crate::color::blue::s9(),
             ActivityKind::Approved => crate::color::green::s9(),
@@ -110,6 +111,7 @@ pub struct ActivityItem {
     pub avatar_url: Option<String>,
     pub pr_title: String,
     pub repo: String,
+    pub number: u32,
     pub url: String,
     pub occurred_at: String,
 }

@@ -1,10 +1,10 @@
 use super::pr_status::{CiStatusIcon, PrStatusIcon};
-use super::shared::{ContextMenu, ContextMenuItem};
+use super::shared::{ContextMenu, ContextMenuItem, list_text_max_width, truncate_line};
 use crate::color;
 use crate::model::{CiStatus, PrStatus, PullRequest};
 use gpui::{
     App, ClickEvent, ElementId, InteractiveElement, IntoElement, MouseDownEvent, ParentElement,
-    Pixels, RenderOnce, SharedString, Styled, Window, div, prelude::*, px,
+    RenderOnce, SharedString, Styled, Window, div, prelude::*, px,
 };
 
 type ToggleMenuHandler = Box<dyn Fn(&ClickEvent, &mut Window, &mut App) + 'static>;
@@ -31,24 +31,12 @@ pub struct PrItem {
 }
 
 fn truncated_title(title: SharedString, window: &mut Window) -> SharedString {
-    let list_width = window.viewport_size().width.min(px(560.0));
-    let reserved = px(16.0) // pr-list px_4
-        + px(16.0)
-        + px(12.0) // pr item px_3
-        + px(12.0)
-        + px(8.0) // gap before context menu
+    let extra_reserved = px(8.0) // gap before context menu
         + px(28.0) // context menu button
         + px(20.0) // status icon
         + px(8.0); // gap after icon
-    let max_width: Pixels = (list_width - reserved).max(px(48.0));
-
-    let text_style = window.text_style();
-    let font_size = text_style.font_size.to_pixels(window.rem_size());
-    let mut runs = vec![text_style.to_run(title.len())];
-    window
-        .text_system()
-        .line_wrapper(text_style.font(), font_size)
-        .truncate_line(title, max_width, "...", &mut runs)
+    let max_width = list_text_max_width(window, extra_reserved);
+    truncate_line(title, max_width, window)
 }
 
 fn pr_number_label(pr: &PullRequest) -> String {
