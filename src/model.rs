@@ -24,7 +24,7 @@ impl PrStatus {
             PrStatus::Open => crate::color::green::s9(),
             PrStatus::Draft => crate::color::gray::s9(),
             PrStatus::Closed => crate::color::gray::s10(),
-            PrStatus::Merged => crate::color::blue::s11(),
+            PrStatus::Merged => crate::color::violet::s11(),
         }
     }
 }
@@ -93,7 +93,7 @@ impl ActivityKind {
 
     pub fn color(&self) -> gpui::Hsla {
         match self {
-            ActivityKind::Merged => crate::color::blue::s11(),
+            ActivityKind::Merged => crate::color::violet::s11(),
             ActivityKind::Closed => crate::color::gray::s10(),
             ActivityKind::Reopened => crate::color::green::s9(),
             ActivityKind::Comment => crate::color::blue::s9(),

@@ -176,6 +176,49 @@ pub mod blue {
     }
 }
 
+#[allow(dead_code)]
+pub mod violet {
+    use super::h;
+    use gpui::Hsla;
+
+    pub fn s1() -> Hsla {
+        h(0xFDFCFE)
+    }
+    pub fn s2() -> Hsla {
+        h(0xFAF8FF)
+    }
+    pub fn s3() -> Hsla {
+        h(0xF4F0FE)
+    }
+    pub fn s4() -> Hsla {
+        h(0xEBE4FF)
+    }
+    pub fn s5() -> Hsla {
+        h(0xE1D9FF)
+    }
+    pub fn s6() -> Hsla {
+        h(0xD4CAFE)
+    }
+    pub fn s7() -> Hsla {
+        h(0xC2B5F5)
+    }
+    pub fn s8() -> Hsla {
+        h(0xAA99EC)
+    }
+    pub fn s9() -> Hsla {
+        h(0x6E56CF)
+    }
+    pub fn s10() -> Hsla {
+        h(0x654DC4)
+    }
+    pub fn s11() -> Hsla {
+        h(0x6550B9)
+    }
+    pub fn s12() -> Hsla {
+        h(0x2F265F)
+    }
+}
+
 pub fn white() -> Hsla {
     h(0xFFFFFF)
 }
