@@ -25,7 +25,6 @@ enum LoginState {
 pub struct Login {
     state: LoginState,
     otp_copied: bool,
-    otp_tooltip_open: bool,
 }
 
 impl Login {
@@ -33,7 +32,6 @@ impl Login {
         Self {
             state: LoginState::LoggedOut,
             otp_copied: false,
-            otp_tooltip_open: false,
         }
     }
 
@@ -143,13 +141,6 @@ impl Render for Login {
                     },
                 )
                 .offset(px(4.0))
-                .open(self.otp_tooltip_open)
-                .on_hover(cx.listener(|this, hovered, _, cx| {
-                    if this.otp_tooltip_open != *hovered {
-                        this.otp_tooltip_open = *hovered;
-                        cx.notify();
-                    }
-                }))
                 .on_close(cx.listener(|this, _, _, cx| {
                     if this.otp_copied {
                         this.otp_copied = false;
@@ -198,7 +189,6 @@ impl Render for Login {
                             .on_click(cx.listener(|this, _, _, cx| {
                                 this.state = LoginState::LoggedOut;
                                 this.otp_copied = false;
-                                this.otp_tooltip_open = false;
                                 cx.notify();
                             })),
                     )

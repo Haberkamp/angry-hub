@@ -1,3 +1,5 @@
+use std::cell::Cell;
+use std::rc::Rc;
 use std::time::{Duration, Instant};
 
 use crate::color;
@@ -13,18 +15,23 @@ const PANEL_ANIMATION: Duration = Duration::from_millis(180);
 const PANEL_SLIDE: f32 = 8.0;
 const ARROW_PATH: &str = "icons/tooltip_arrow.svg";
 
-type HoverHandler = Box<dyn Fn(&bool, &mut Window, &mut App) + 'static>;
+type HoverHandler = Rc<dyn Fn(&bool, &mut Window, &mut App) + 'static>;
 type CloseHandler = Box<dyn Fn(&(), &mut Window, &mut App) + 'static>;
 
 struct OpenPresence {
     id: ElementId,
-    open: bool,
+    host_id: SharedString,
+    label: SharedString,
+    offset: f32,
+    controlled_open: Option<bool>,
     show_delay: Duration,
+    on_hover: Option<HoverHandler>,
     on_close: Option<CloseHandler>,
     child: Option<AnyElement>,
 }
 
 struct OpenPresenceState {
+    hovered: Rc<Cell<bool>>,
     shown: bool,
     opening_since: Option<Instant>,
     closing_since: Option<Instant>,
@@ -59,13 +66,16 @@ impl Element for OpenPresence {
     ) -> (LayoutId, Self::RequestLayoutState) {
         let (layout, closed) = window.with_element_state(global_id.unwrap(), |state, window| {
             let mut state = state.unwrap_or(OpenPresenceState {
+                hovered: Rc::new(Cell::new(false)),
                 shown: false,
                 opening_since: None,
                 closing_since: None,
             });
             let mut closed = false;
+            let hovered = state.hovered.get();
+            let open = self.controlled_open.unwrap_or(hovered);
 
-            let visible = if self.open {
+            let visible = if open {
                 state.closing_since = None;
                 if state.shown {
                     state.opening_since = None;
@@ -99,11 +109,34 @@ impl Element for OpenPresence {
                 }
             };
 
-            let mut element = if visible {
-                self.child.take().expect("presence child")
-            } else {
-                div().into_any_element()
-            };
+            let hovered_cell = state.hovered.clone();
+            let on_hover = self.on_hover.clone();
+            let controlled = self.controlled_open.is_some();
+            let mut root = div()
+                .id(self.host_id.clone())
+                .relative()
+                .flex_none()
+                .on_hover(move |hovered, window, cx| {
+                    if !controlled && hovered_cell.get() != *hovered {
+                        hovered_cell.set(*hovered);
+                        window.refresh();
+                    }
+                    if let Some(on_hover) = &on_hover {
+                        on_hover(hovered, window, cx);
+                    }
+                })
+                .children(self.child.take());
+
+            if visible {
+                root = root.child(tooltip_bubble(
+                    SharedString::from(format!("{}-label", self.host_id)),
+                    self.label.clone(),
+                    self.offset,
+                    open,
+                ));
+            }
+
+            let mut element = root.into_any_element();
             (
                 ((element.request_layout(window, cx), element), closed),
                 state,
@@ -143,13 +176,67 @@ impl Element for OpenPresence {
     }
 }
 
+fn tooltip_bubble(
+    tooltip_id: SharedString,
+    label: SharedString,
+    rest: f32,
+    open: bool,
+) -> AnyElement {
+    let animation_id = SharedString::from(format!(
+        "{}-{}",
+        tooltip_id,
+        if open { "enter" } else { "exit" }
+    ));
+    let bg = color::gray::s12();
+    let fg = color::gray::s1();
+
+    div()
+        .id(tooltip_id)
+        .absolute()
+        .bottom_full()
+        .left_0()
+        .right_0()
+        .flex()
+        .flex_col()
+        .items_center()
+        .child(
+            div()
+                .px_2()
+                .py_1()
+                .rounded(px(6.0))
+                .bg(bg)
+                .text_xs()
+                .text_color(fg)
+                .whitespace_nowrap()
+                .child(label),
+        )
+        .child(
+            svg()
+                .path(ARROW_PATH)
+                .w(px(10.0))
+                .h(px(6.0))
+                .mt(px(-1.0))
+                .flex_none()
+                .text_color(bg),
+        )
+        .with_animation(
+            animation_id,
+            Animation::new(PANEL_ANIMATION).with_easing(ease_out_quint()),
+            move |this, delta| {
+                let t = if open { delta } else { 1.0 - delta };
+                this.opacity(t).mb(px(rest - (1.0 - t) * PANEL_SLIDE))
+            },
+        )
+        .into_any_element()
+}
+
 #[derive(IntoElement)]
 pub struct Tooltip {
     id: SharedString,
     label: SharedString,
     offset: f32,
     show_delay: Duration,
-    open: bool,
+    open: Option<bool>,
     on_hover: Option<HoverHandler>,
     on_close: Option<CloseHandler>,
     child: Option<AnyElement>,
@@ -162,7 +249,7 @@ impl Tooltip {
             label: label.into(),
             offset: DEFAULT_OFFSET,
             show_delay: DEFAULT_SHOW_DELAY,
-            open: false,
+            open: None,
             on_hover: None,
             on_close: None,
             child: None,
@@ -180,13 +267,15 @@ impl Tooltip {
         self
     }
 
+    #[allow(dead_code)]
     pub fn open(mut self, open: bool) -> Self {
-        self.open = open;
+        self.open = Some(open);
         self
     }
 
+    #[allow(dead_code)]
     pub fn on_hover(mut self, listener: impl Fn(&bool, &mut Window, &mut App) + 'static) -> Self {
-        self.on_hover = Some(Box::new(listener));
+        self.on_hover = Some(Rc::new(listener));
         self
     }
 
@@ -203,73 +292,18 @@ impl Tooltip {
 
 impl RenderOnce for Tooltip {
     fn render(self, _window: &mut Window, _cx: &mut App) -> impl IntoElement {
-        let open = self.open;
-        let rest = self.offset;
-        let tooltip_id = SharedString::from(format!("{}-label", self.id));
-        let animation_id = SharedString::from(format!(
-            "{}-{}",
-            tooltip_id,
-            if open { "enter" } else { "exit" }
-        ));
-        let bg = color::gray::s12();
-        let fg = color::gray::s1();
         let presence_id = ElementId::from(SharedString::from(format!("{}-presence", self.id)));
 
-        let bubble = div()
-            .id(tooltip_id)
-            .absolute()
-            .bottom_full()
-            .left_0()
-            .right_0()
-            .flex()
-            .flex_col()
-            .items_center()
-            .child(
-                div()
-                    .px_2()
-                    .py_1()
-                    .rounded(px(6.0))
-                    .bg(bg)
-                    .text_xs()
-                    .text_color(fg)
-                    .whitespace_nowrap()
-                    .child(self.label),
-            )
-            .child(
-                svg()
-                    .path(ARROW_PATH)
-                    .w(px(10.0))
-                    .h(px(6.0))
-                    .mt(px(-1.0))
-                    .flex_none()
-                    .text_color(bg),
-            )
-            .with_animation(
-                animation_id,
-                Animation::new(PANEL_ANIMATION).with_easing(ease_out_quint()),
-                move |this, delta| {
-                    let t = if open { delta } else { 1.0 - delta };
-                    this.opacity(t).mb(px(rest - (1.0 - t) * PANEL_SLIDE))
-                },
-            );
-
-        let mut root = div()
-            .id(self.id)
-            .relative()
-            .flex_none()
-            .children(self.child)
-            .child(OpenPresence {
-                id: presence_id,
-                open,
-                show_delay: self.show_delay,
-                on_close: self.on_close,
-                child: Some(bubble.into_any_element()),
-            });
-
-        if let Some(on_hover) = self.on_hover {
-            root = root.on_hover(move |hovered, window, cx| on_hover(hovered, window, cx));
+        OpenPresence {
+            id: presence_id,
+            host_id: self.id,
+            label: self.label,
+            offset: self.offset,
+            controlled_open: self.open,
+            show_delay: self.show_delay,
+            on_hover: self.on_hover,
+            on_close: self.on_close,
+            child: self.child,
         }
-
-        root
     }
 }
