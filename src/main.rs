@@ -164,6 +164,9 @@ impl Render for AppView {
             .on_action(|_: &app_menus::ShowActivity, window, cx| {
                 Router::navigate_window(window, cx, "/activity");
             })
+            .on_action(|_: &app_menus::ShowSettings, window, cx| {
+                Router::navigate_window(window, cx, "/settings");
+            })
             .on_action(|_: &app_menus::CloseWindow, window, cx| {
                 window_frame::persist(window, cx);
                 window.remove_window()
