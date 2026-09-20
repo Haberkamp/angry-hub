@@ -62,7 +62,7 @@ dependencies = [
 
 [[package]]
 name = "angry-hub"
-version = "0.2.0"
+version = "0.3.0"
 dependencies = [
  "dirs 5.0.1",
  "futures",
