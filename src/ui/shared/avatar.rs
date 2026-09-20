@@ -25,7 +25,7 @@ impl Avatar {
         self
     }
 
-    fn placeholder(size: Pixels) -> AnyElement {
+    fn placeholder(size: Pixels, bg: gpui::Hsla, icon_color: gpui::Hsla) -> AnyElement {
         let icon_size = px(f32::from(size) * 0.6);
         div()
             .size(size)
@@ -34,28 +34,26 @@ impl Avatar {
             .flex()
             .items_center()
             .justify_center()
-            .bg(color::gray::s4())
-            .child(
-                Icon::new(IconName::User)
-                    .size(icon_size)
-                    .color(color::gray::s10()),
-            )
+            .bg(bg)
+            .child(Icon::new(IconName::User).size(icon_size).color(icon_color))
             .into_any_element()
     }
 }
 
 impl RenderOnce for Avatar {
-    fn render(self, _window: &mut Window, _cx: &mut App) -> impl IntoElement {
+    fn render(self, _window: &mut Window, cx: &mut App) -> impl IntoElement {
         let size = self.size;
+        let bg = color::interaction::pressed(cx);
+        let icon_color = color::icon::subtle(cx);
         match self.url {
             Some(url) => img(url)
                 .size(size)
                 .rounded_full()
                 .flex_none()
-                .with_loading(move || Avatar::placeholder(size))
-                .with_fallback(move || Avatar::placeholder(size))
+                .with_loading(move || Avatar::placeholder(size, bg, icon_color))
+                .with_fallback(move || Avatar::placeholder(size, bg, icon_color))
                 .into_any_element(),
-            None => Avatar::placeholder(size),
+            None => Avatar::placeholder(size, bg, icon_color),
         }
     }
 }

@@ -98,6 +98,7 @@ impl Login {
 
 impl Render for Login {
     fn render(&mut self, _window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+        let otp_hover = color::interaction::hovered(cx);
         let children: Vec<_> = match &self.state {
             LoginState::LoggedOut => vec![
                 Button::new("login", "Log in with GitHub")
@@ -114,7 +115,7 @@ impl Render for Login {
                 if let Some(e) = error {
                     children.push(
                         div()
-                            .text_color(color::red::s9())
+                            .text_color(color::text::danger(cx))
                             .child(e.to_string())
                             .into_any_element(),
                     );
@@ -158,7 +159,7 @@ impl Render for Login {
                         .text_3xl()
                         .font_weight(FontWeight::SEMIBOLD)
                         .cursor_pointer()
-                        .hover(|this| this.bg(color::gray::s3()))
+                        .hover(|this| this.bg(otp_hover))
                         .on_click(cx.listener(move |this, _, _, cx| {
                             this.copy_otp(&code, cx);
                         }))

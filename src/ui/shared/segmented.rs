@@ -72,7 +72,7 @@ impl SegmentedControl {
 }
 
 impl RenderOnce for SegmentedControl {
-    fn render(self, _window: &mut Window, _cx: &mut App) -> impl IntoElement {
+    fn render(self, _window: &mut Window, cx: &mut App) -> impl IntoElement {
         let selected = self.selected.clone();
         let on_change = self.on_change.map(Arc::new);
         let count = self.segments.len().max(1) as f32;
@@ -92,6 +92,10 @@ impl RenderOnce for SegmentedControl {
             .unwrap_or(to_ix);
         let animate = from_ix != to_ix;
         let animation_id = format!("{}-indicator-{}-{}", self.id, from_ix, to_ix);
+        let pill_bg = color::interaction::pressed(cx);
+        let track_bg = color::surface::sunken(cx);
+        let selected_text = color::text::primary(cx);
+        let muted_text = color::text::secondary(cx);
 
         let indicator: AnyElement = {
             let pill = div()
@@ -99,7 +103,7 @@ impl RenderOnce for SegmentedControl {
                 .top(px(0.0))
                 .bottom(px(0.0))
                 .rounded_full()
-                .bg(color::gray::s4())
+                .bg(pill_bg)
                 .w(relative(1.0 / count));
             if animate {
                 pill.with_animation(
@@ -123,7 +127,7 @@ impl RenderOnce for SegmentedControl {
             .items_center()
             .p(px(3.0))
             .rounded_full()
-            .bg(color::gray::s3())
+            .bg(track_bg)
             .child(
                 div()
                     .relative()
@@ -150,11 +154,8 @@ impl RenderOnce for SegmentedControl {
                             .rounded_full()
                             .text_size(px(14.0))
                             .cursor_pointer()
-                            .when(is_selected, |this| this.text_color(color::gray::s12()))
-                            .when(!is_selected, |this| {
-                                this.text_color(color::gray::s9())
-                                    .hover(|this| this.bg(color::gray::s3().opacity(0.5)))
-                            })
+                            .when(is_selected, |this| this.text_color(selected_text))
+                            .when(!is_selected, |this| this.text_color(muted_text))
                             .child(segment.label);
 
                         if let Some(on_change) = on_change {

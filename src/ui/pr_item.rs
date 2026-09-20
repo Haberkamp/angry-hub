@@ -133,7 +133,7 @@ impl PrItem {
 }
 
 impl RenderOnce for PrItem {
-    fn render(self, window: &mut Window, _cx: &mut App) -> impl IntoElement {
+    fn render(self, window: &mut Window, cx: &mut App) -> impl IntoElement {
         let url = self.url.clone();
         let menu_id = self.menu_id;
         let title = truncated_title(self.title, self.has_conflicts, window);
@@ -143,7 +143,7 @@ impl RenderOnce for PrItem {
                 Tooltip::new(self.conflict_tooltip_id, "Merge conflicts").child(
                     Icon::new(IconName::MergeConflicts)
                         .size(px(16.0))
-                        .color(color::status::failure()),
+                        .color(color::status::failure(cx)),
                 ),
             )
         } else {
@@ -181,6 +181,9 @@ impl RenderOnce for PrItem {
             });
         }
 
+        let hover = color::interaction::hovered(cx);
+        let meta = color::text::secondary(cx);
+
         div()
             .id(self.id)
             .group(self.group)
@@ -192,7 +195,7 @@ impl RenderOnce for PrItem {
             .py_2()
             .px_3()
             .rounded_md()
-            .hover(|this| this.bg(color::gray::s3()))
+            .hover(|this| this.bg(hover))
             .child(
                 div()
                     .flex_1()
@@ -233,7 +236,7 @@ impl RenderOnce for PrItem {
                             .items_center()
                             .ml(px(28.0))
                             .text_size(px(12.0))
-                            .text_color(color::gray::s10())
+                            .text_color(meta)
                             .child({
                                 let mut meta = div()
                                     .flex()

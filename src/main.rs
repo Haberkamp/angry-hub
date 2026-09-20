@@ -6,7 +6,8 @@ use std::time::{Duration, Instant};
 
 use gpui::{
     App, Application, AssetSource, Bounds, Context, MouseDownEvent, Render, Result, SharedString,
-    TitlebarOptions, Window, WindowBounds, WindowOptions, div, ease_in_out, prelude::*, px, size,
+    Subscription, TitlebarOptions, Window, WindowBounds, WindowOptions, div, ease_in_out,
+    prelude::*, px, size,
 };
 use rooter::Router;
 
@@ -64,10 +65,17 @@ struct AppView {
     router: gpui::Entity<Router>,
     notifications: gpui::Entity<NotificationList>,
     resize_generation: u64,
+    _subscriptions: Vec<Subscription>,
 }
 
 impl AppView {
     fn new(window: &mut Window, cx: &mut Context<Self>) -> Self {
+        color::init_theme(window, cx);
+        let appearance_sub = cx.observe_window_appearance(window, |_, window, cx| {
+            color::sync_system_appearance(window, cx);
+            cx.notify();
+        });
+        let theme_sub = cx.observe_global::<color::Theme>(|_, cx| cx.notify());
         let login = cx.new(|_| Login::new());
         let chrome = cx.new(|_| layout::Chrome::new());
         let pull_requests = cx.new(|cx| PullRequests::new(chrome.clone(), window, cx));
@@ -81,6 +89,7 @@ impl AppView {
             ),
             notifications: NotificationList::init(cx),
             resize_generation: 0,
+            _subscriptions: vec![appearance_sub, theme_sub],
         }
     }
 
@@ -130,8 +139,8 @@ impl Render for AppView {
             .flex()
             .flex_col()
             .relative()
-            .bg(color::gray::s1())
-            .text_color(color::gray::s12())
+            .bg(color::surface::default(cx))
+            .text_color(color::text::primary(cx))
             .child(self.router.clone())
             .child(self.notifications.clone())
             .on_mouse_down(

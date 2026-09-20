@@ -172,7 +172,9 @@ impl WindowExt for Window {
 }
 
 impl Render for NotificationList {
-    fn render(&mut self, _window: &mut Window, _cx: &mut Context<Self>) -> impl IntoElement {
+    fn render(&mut self, _window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+        let toast_bg = color::surface::inverse(cx);
+        let toast_fg = color::text::inverse(cx);
         div()
             .id("notification-layer")
             .absolute()
@@ -201,8 +203,8 @@ impl Render for NotificationList {
                         .px_3()
                         .py_2()
                         .rounded(px(8.0))
-                        .bg(color::gray::s12())
-                        .text_color(color::white())
+                        .bg(toast_bg)
+                        .text_color(toast_fg)
                         .text_sm()
                         .shadow_md()
                         .occlude()

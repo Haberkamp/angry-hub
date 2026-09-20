@@ -3,6 +3,7 @@ use rooter::{Outlet, RouteContext, Router};
 
 use crate::color;
 use crate::ui::{Icon, IconName, Segment, SegmentedControl, Spinner};
+use crate::views::settings::Settings;
 
 pub struct Chrome {
     previous_selected: String,
@@ -39,6 +40,7 @@ impl Chrome {
 
 pub fn main_layout(
     chrome: Entity<Chrome>,
+    settings: Entity<Settings>,
     route: RouteContext,
     _window: &mut Window,
     cx: &mut App,
@@ -53,6 +55,7 @@ pub fn main_layout(
     chrome.update(cx, |chrome, cx| {
         chrome.set_on_settings(is_settings, selected, cx)
     });
+    settings.update(cx, |settings, cx| settings.set_on_page(is_settings, cx));
     let previous_selected = chrome.read(cx).previous_selected.clone();
 
     div()
@@ -127,7 +130,7 @@ pub fn main_layout(
 }
 
 impl Render for Chrome {
-    fn render(&mut self, _window: &mut Window, _cx: &mut Context<Self>) -> impl IntoElement {
+    fn render(&mut self, _window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let on_settings = self.on_settings;
         let icon = if on_settings {
             IconName::Close
@@ -139,6 +142,10 @@ impl Render for Chrome {
         } else {
             "open-settings"
         };
+        let rest_bg = color::surface::default(cx);
+        let hover_bg = color::interaction::hovered(cx);
+        let active_bg = color::interaction::pressed(cx);
+        let icon_color = color::icon::subtle(cx);
 
         div()
             .id("top-right")
@@ -159,12 +166,12 @@ impl Render for Chrome {
                     .flex()
                     .items_center()
                     .justify_center()
-                    .bg(color::gray::s1())
-                    .hover(|this| this.bg(color::gray::s3()))
-                    .active(|this| this.bg(color::gray::s4()))
+                    .bg(rest_bg)
+                    .hover(|this| this.bg(hover_bg))
+                    .active(|this| this.bg(active_bg))
                     .cursor_pointer()
                     .rounded_full()
-                    .child(Icon::new(icon).size(px(20.0)).color(color::gray::s9()))
+                    .child(Icon::new(icon).size(px(20.0)).color(icon_color))
                     .on_click(move |_, window, cx| {
                         if on_settings {
                             Router::back_window(window, cx);

@@ -479,13 +479,14 @@ impl ContextMenu {
 }
 
 impl RenderOnce for ContextMenu {
-    fn render(self, window: &mut Window, _cx: &mut App) -> impl IntoElement {
+    fn render(self, window: &mut Window, cx: &mut App) -> impl IntoElement {
         let open = self.open;
-        let trigger_bg = if open {
-            color::gray::s4()
-        } else {
-            color::gray::s3()
-        };
+        let trigger_active = color::interaction::pressed(cx);
+        let ellipsis = color::icon::subtle(cx);
+        let overlay_bg = color::surface::overlay(cx);
+        let overlay_border = color::border::default(cx);
+        let row_hover = color::interaction::pressed(cx);
+        let row_text = color::text::primary(cx);
         let on_select = self.on_select;
         let viewport = window.viewport_size();
         let dismiss_id = SharedString::from(format!("{}-dismiss", self.id));
@@ -498,8 +499,8 @@ impl RenderOnce for ContextMenu {
             .flex_none()
             .items_center()
             .justify_center()
-            .bg(trigger_bg)
-            .hover(|this| this.bg(color::gray::s4()))
+            .when(open, |this| this.bg(trigger_active))
+            .hover(|this| this.bg(trigger_active))
             .rounded_full()
             .cursor_pointer()
             .when(!open, |this| {
@@ -510,11 +511,7 @@ impl RenderOnce for ContextMenu {
                     this
                 }
             })
-            .child(
-                Icon::new(IconName::Ellipsis)
-                    .size(px(14.0))
-                    .color(color::gray::s9()),
-            );
+            .child(Icon::new(IconName::Ellipsis).size(px(14.0)).color(ellipsis));
 
         if let Some(on_toggle_open) = self.on_toggle_open {
             trigger = trigger
@@ -550,9 +547,9 @@ impl RenderOnce for ContextMenu {
             .flex()
             .flex_col()
             .p_1()
-            .bg(color::white())
+            .bg(overlay_bg)
             .border_1()
-            .border_color(color::gray::s6())
+            .border_color(overlay_border)
             .rounded(px(9.0))
             .shadow_md()
             .occlude()
@@ -570,14 +567,13 @@ impl RenderOnce for ContextMenu {
                     .justify_between()
                     .gap_3()
                     .when(!loading, |this| {
-                        this.cursor_pointer()
-                            .hover(|this| this.bg(color::gray::s4()))
+                        this.cursor_pointer().hover(|this| this.bg(row_hover))
                     })
                     .when(loading, |this| this.cursor_default())
                     .child(
                         div()
                             .text_size(px(13.0))
-                            .text_color(color::gray::s12())
+                            .text_color(row_text)
                             .whitespace_nowrap()
                             .child(item.label),
                     )
