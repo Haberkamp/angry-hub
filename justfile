@@ -11,6 +11,18 @@ notary_profile := "angry-hub-notary"
 app_name := "Angry Hub"
 entitlements := "assets/macos/entitlements.plist"
 
+# Format Rust sources.
+fmt:
+    cargo fmt --all
+
+# Run Clippy with the same flags as CI.
+lint:
+    cargo clippy --locked --all-targets --all-features -- -D warnings
+
+# Run tests with the same flags as CI.
+test:
+    cargo test --locked --all-targets --all-features
+
 # Save App Store Connect credentials for notarization (interactive).
 setup-notary:
     xcrun notarytool store-credentials {{notary_profile}} --team-id 7SG72YY7UD
