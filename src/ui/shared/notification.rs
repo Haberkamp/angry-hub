@@ -12,8 +12,8 @@ const SHOW_DURATION: Duration = Duration::from_millis(2500);
 const PANEL_ANIMATION: Duration = Duration::from_millis(180);
 const PANEL_SLIDE: f32 = 12.0;
 const FALLBACK_TOAST_HEIGHT: f32 = 36.0;
-const WIGGLE_DURATION: Duration = Duration::from_millis(420);
-const WIGGLE_AMPLITUDE: f32 = 5.0;
+const JUMP_DURATION: Duration = Duration::from_millis(240);
+const JUMP_AMPLITUDE: f32 = 6.0;
 
 #[derive(Clone)]
 pub struct Notification {
@@ -66,7 +66,7 @@ struct ActiveNotification {
     closing: bool,
     created_at: Instant,
     closing_since: Option<Instant>,
-    wiggle_at: Option<Instant>,
+    jump_at: Option<Instant>,
 }
 
 pub struct NotificationList {
@@ -98,7 +98,7 @@ impl NotificationList {
             existing.generation += 1;
             existing.closing = false;
             existing.closing_since = None;
-            existing.wiggle_at = Some(Instant::now());
+            existing.jump_at = Some(Instant::now());
             let id = existing.id;
             let generation = existing.generation;
             cx.notify();
@@ -116,7 +116,7 @@ impl NotificationList {
             closing: false,
             created_at: Instant::now(),
             closing_since: None,
-            wiggle_at: None,
+            jump_at: None,
         });
         cx.notify();
         self.schedule_dismiss(id, 0, window, cx);
@@ -196,7 +196,7 @@ impl Render for NotificationList {
                     id: item.id,
                     created_at: item.created_at,
                     closing_since: item.closing_since,
-                    wiggle_at: item.wiggle_at,
+                    jump_at: item.jump_at,
                     child: div()
                         .id(SharedString::from(format!("notification-{}", item.id)))
                         .flex_shrink_0()
@@ -228,7 +228,7 @@ struct StackToast {
     id: u64,
     created_at: Instant,
     closing_since: Option<Instant>,
-    wiggle_at: Option<Instant>,
+    jump_at: Option<Instant>,
     child: AnyElement,
 }
 
@@ -271,7 +271,7 @@ impl Element for StackToast {
         window: &mut Window,
         cx: &mut App,
     ) -> (LayoutId, Self::RequestLayoutState) {
-        if toast_still_animating(self.created_at, self.closing_since, self.wiggle_at) {
+        if toast_still_animating(self.created_at, self.closing_since, self.jump_at) {
             window.request_animation_frame();
         }
 
@@ -339,7 +339,7 @@ impl Element for StackToast {
                         .map_or(height, |previous| previous.max(height)),
                 );
             }
-            let offset = Point::new(px(0.0), px(wiggle_offset(self.wiggle_at)));
+            let offset = Point::new(px(0.0), px(jump_offset(self.jump_at)));
             window.with_element_offset(offset, |window| {
                 layout.child.prepaint(window, cx);
             });
@@ -372,22 +372,21 @@ fn size_factor(created_at: Instant, closing_since: Option<Instant>) -> f32 {
 fn toast_still_animating(
     created_at: Instant,
     closing_since: Option<Instant>,
-    wiggle_at: Option<Instant>,
+    jump_at: Option<Instant>,
 ) -> bool {
     let t = size_factor(created_at, closing_since);
-    t < 1.0 || wiggle_offset(wiggle_at) != 0.0
+    t < 1.0 || jump_offset(jump_at) != 0.0
 }
 
-fn wiggle_offset(wiggle_at: Option<Instant>) -> f32 {
-    let Some(start) = wiggle_at else {
+fn jump_offset(jump_at: Option<Instant>) -> f32 {
+    let Some(start) = jump_at else {
         return 0.0;
     };
-    let t = (start.elapsed().as_secs_f32() / WIGGLE_DURATION.as_secs_f32()).clamp(0.0, 1.0);
+    let t = (start.elapsed().as_secs_f32() / JUMP_DURATION.as_secs_f32()).clamp(0.0, 1.0);
     if t >= 1.0 {
         return 0.0;
     }
-    let decay = 1.0 - t;
-    (t * std::f32::consts::PI * 4.0).sin() * WIGGLE_AMPLITUDE * decay
+    -(t * std::f32::consts::PI).sin() * JUMP_AMPLITUDE
 }
 
 fn eased_progress(start: Instant, duration: Duration) -> f32 {
