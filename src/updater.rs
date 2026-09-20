@@ -27,11 +27,116 @@ fn latest_available() -> Result<Option<String>, String> {
 }
 
 fn install_update() -> Result<(), String> {
-    configure()
+    #[cfg(target_os = "macos")]
+    {
+        install_macos_bundle()
+    }
+    #[cfg(not(target_os = "macos"))]
+    {
+        configure()
+            .map_err(|error| error.to_string())?
+            .update()
+            .map(|_| ())
+            .map_err(|error| error.to_string())
+    }
+}
+
+#[cfg(target_os = "macos")]
+fn current_app_bundle() -> Result<std::path::PathBuf, String> {
+    let exe = std::env::current_exe().map_err(|error| error.to_string())?;
+    exe.ancestors()
+        .find(|path| path.extension().and_then(|ext| ext.to_str()) == Some("app"))
+        .map(std::path::Path::to_path_buf)
+        .ok_or_else(|| "Angry Hub is not running from an .app bundle".into())
+}
+
+#[cfg(target_os = "macos")]
+fn run(command: &str, args: &[&str]) -> Result<(), String> {
+    let output = std::process::Command::new(command)
+        .args(args)
+        .output()
+        .map_err(|error| format!("{command} failed to start: {error}"))?;
+    if output.status.success() {
+        Ok(())
+    } else {
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        Err(format!("{command} failed: {stderr}"))
+    }
+}
+
+#[cfg(target_os = "macos")]
+fn install_macos_bundle() -> Result<(), String> {
+    let updater = configure().map_err(|error| error.to_string())?;
+    let release = updater
+        .is_update_available()
         .map_err(|error| error.to_string())?
-        .update()
-        .map(|_| ())
-        .map_err(|error| error.to_string())
+        .ok_or_else(|| "no update available".to_string())?;
+    let asset = release
+        .asset_for(self_update::get_target(), None)
+        .ok_or_else(|| "no macOS release asset for this Mac".to_string())?;
+
+    let bundle = current_app_bundle()?;
+    let parent = bundle
+        .parent()
+        .ok_or_else(|| "could not find the folder that contains Angry Hub.app".to_string())?;
+
+    let staging = tempfile::TempDir::new_in(parent).map_err(|error| error.to_string())?;
+    let stash = tempfile::TempDir::new_in(parent).map_err(|error| error.to_string())?;
+    let archive_path = staging.path().join(asset.name());
+    {
+        let mut file = std::fs::File::create(&archive_path).map_err(|error| error.to_string())?;
+        self_update::Download::from_url(asset.download_url())
+            .request_header(
+                self_update::http::header::ACCEPT,
+                "application/octet-stream",
+            )
+            .download_to(&mut file)
+            .map_err(|error| error.to_string())?;
+    }
+
+    run(
+        "/usr/bin/ditto",
+        &[
+            "-x",
+            "-k",
+            archive_path.to_str().ok_or("archive path is not UTF-8")?,
+            staging.path().to_str().ok_or("staging path is not UTF-8")?,
+        ],
+    )?;
+
+    let staged = staging.path().join("Angry Hub.app");
+    if !staged.is_dir() {
+        return Err("the release zip did not contain Angry Hub.app".into());
+    }
+
+    let staged_str = staged.to_str().ok_or("staged app path is not UTF-8")?;
+    let _ = run(
+        "/usr/bin/xattr",
+        &["-dr", "com.apple.quarantine", staged_str],
+    );
+    run("/usr/bin/codesign", &["--verify", "--strict", staged_str])?;
+
+    let exe = std::env::current_exe().map_err(|error| error.to_string())?;
+    let stashed_exe = stash.path().join("exe-aside");
+    let stashed_old = stash.path().join("old");
+    std::fs::rename(&exe, &stashed_exe).map_err(|error| error.to_string())?;
+    if let Err(error) = std::fs::rename(&bundle, &stashed_old) {
+        let _ = std::fs::rename(&stashed_exe, &exe);
+        return Err(error.to_string());
+    }
+    if let Err(error) = std::fs::rename(&staged, &bundle) {
+        let _ = std::fs::rename(&stashed_old, &bundle);
+        let _ = std::fs::rename(&stashed_exe, &exe);
+        return Err(error.to_string());
+    }
+
+    if let Some(installed) = bundle.to_str() {
+        let _ = run(
+            "/usr/bin/xattr",
+            &["-dr", "com.apple.quarantine", installed],
+        );
+    }
+    Ok(())
 }
 
 pub fn disabled() -> bool {
