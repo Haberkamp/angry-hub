@@ -66,6 +66,8 @@ pub struct PullRequest {
     pub required_approvals: u32,
     #[serde(default)]
     pub has_conflicts: bool,
+    #[serde(default)]
+    pub branch: String,
     pub updated_at: String,
 }
 

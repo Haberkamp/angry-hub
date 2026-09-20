@@ -3,8 +3,8 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use gpui::{
-    AnyElement, Context, Entity, PromptLevel, Render, SharedString, Subscription, Timer, Window,
-    div, prelude::*,
+    AnyElement, ClipboardItem, Context, Entity, PromptLevel, Render, SharedString, Subscription,
+    Timer, Window, div, prelude::*,
 };
 
 use crate::color;
@@ -485,6 +485,19 @@ impl Render for PullRequests {
                                     this.pr_menu_open = None;
                                     cx.notify();
                                 }))
+                                .on_copy_branch({
+                                    let branch = pr.branch.clone();
+                                    let entity = cx.entity();
+                                    move |_, app| {
+                                        entity.update(app, |this, cx| {
+                                            cx.write_to_clipboard(ClipboardItem::new_string(
+                                                branch.clone(),
+                                            ));
+                                            this.pr_menu_open = None;
+                                            cx.notify();
+                                        });
+                                    }
+                                })
                                 .on_close_pr({
                                     let close_id = close_id.clone();
                                     let url = pr.url.clone();
