@@ -454,7 +454,9 @@ impl Render for PullRequests {
                                             cx.notify();
                                         });
                                         window.push_notification(
-                                            Notification::new().message("Copied branch name"),
+                                            Notification::new()
+                                                .key("copy-branch")
+                                                .message("Copied branch name"),
                                             app,
                                         );
                                     }
