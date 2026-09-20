@@ -28,6 +28,7 @@ pub struct PullRequests {
     visible_tab_repos: Option<HashSet<String>>,
     visibility_menu_open: bool,
     pr_menu_open: Option<String>,
+    conflict_tooltip_open: Option<String>,
     closing_pr: Option<String>,
     refreshing: bool,
     loading: bool,
@@ -52,6 +53,7 @@ impl PullRequests {
             visible_tab_repos: Prefs::load_visible_tab_repos(),
             visibility_menu_open: false,
             pr_menu_open: None,
+            conflict_tooltip_open: None,
             closing_pr: None,
             refreshing: false,
             loading: false,
@@ -419,6 +421,27 @@ impl Render for PullRequests {
                             let close_id = pr.id.clone();
                             PrItem::new(ix, pr)
                                 .menu_open(self.pr_menu_open.as_deref() == Some(&menu_key))
+                                .conflict_tooltip_open(
+                                    self.conflict_tooltip_open.as_deref() == Some(&menu_key),
+                                )
+                                .on_conflict_tooltip_hover(cx.listener({
+                                    let menu_key = menu_key.clone();
+                                    move |this, hovered, _, cx| {
+                                        let next = if *hovered {
+                                            Some(menu_key.clone())
+                                        } else if this.conflict_tooltip_open.as_deref()
+                                            == Some(&menu_key)
+                                        {
+                                            None
+                                        } else {
+                                            this.conflict_tooltip_open.clone()
+                                        };
+                                        if this.conflict_tooltip_open != next {
+                                            this.conflict_tooltip_open = next;
+                                            cx.notify();
+                                        }
+                                    }
+                                }))
                                 .closing(self.closing_pr.as_deref() == Some(&menu_key))
                                 .on_toggle_menu(cx.listener({
                                     let menu_key = menu_key.clone();

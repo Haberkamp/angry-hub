@@ -1,5 +1,7 @@
 use super::pr_status::{CiStatusIcon, PrStatusIcon};
-use super::shared::{ContextMenu, ContextMenuItem, list_text_max_width, truncate_line};
+use super::shared::{
+    ContextMenu, ContextMenuItem, Icon, IconName, Tooltip, list_text_max_width, truncate_line,
+};
 use crate::color;
 use crate::model::{CiStatus, PrStatus, PullRequest};
 use gpui::{
@@ -10,6 +12,7 @@ use gpui::{
 type ToggleMenuHandler = Box<dyn Fn(&ClickEvent, &mut Window, &mut App) + 'static>;
 type DismissMenuHandler = Box<dyn Fn(&MouseDownEvent, &mut Window, &mut App) + 'static>;
 type ClosePrHandler = Box<dyn Fn(&mut Window, &mut App) + 'static>;
+type HoverHandler = Box<dyn Fn(&bool, &mut Window, &mut App) + 'static>;
 
 #[derive(IntoElement)]
 pub struct PrItem {
@@ -26,18 +29,27 @@ pub struct PrItem {
     approvals: SharedString,
     required_approvals: SharedString,
     show_approvals: bool,
+    has_conflicts: bool,
+    conflict_tooltip_id: SharedString,
+    conflict_tooltip_open: bool,
     menu_open: bool,
     closing: bool,
     on_toggle_menu: Option<ToggleMenuHandler>,
     on_dismiss_menu: Option<DismissMenuHandler>,
     on_close_pr: Option<ClosePrHandler>,
+    on_conflict_tooltip_hover: Option<HoverHandler>,
 }
 
-fn truncated_title(title: SharedString, window: &mut Window) -> SharedString {
+fn truncated_title(title: SharedString, has_conflicts: bool, window: &mut Window) -> SharedString {
     let extra_reserved = px(8.0) // gap before context menu
         + px(28.0) // context menu button
         + px(20.0) // status icon
-        + px(8.0); // gap after icon
+        + px(8.0) // gap after icon
+        + if has_conflicts {
+            px(8.0) + px(16.0) // gap + conflict icon
+        } else {
+            px(0.0)
+        };
     let max_width = list_text_max_width(window, extra_reserved);
     truncate_line(title, max_width, window)
 }
@@ -71,11 +83,15 @@ impl PrItem {
             approvals: pr.approvals.to_string().into(),
             required_approvals: pr.required_approvals.to_string().into(),
             show_approvals: pr.required_approvals > 0,
+            has_conflicts: pr.has_conflicts,
+            conflict_tooltip_id: SharedString::from(format!("pr-conflicts-{ix}")),
+            conflict_tooltip_open: false,
             menu_open: false,
             closing: false,
             on_toggle_menu: None,
             on_dismiss_menu: None,
             on_close_pr: None,
+            on_conflict_tooltip_hover: None,
         }
     }
 
@@ -109,13 +125,42 @@ impl PrItem {
         self.on_close_pr = Some(Box::new(listener));
         self
     }
+
+    pub fn conflict_tooltip_open(mut self, open: bool) -> Self {
+        self.conflict_tooltip_open = open;
+        self
+    }
+
+    pub fn on_conflict_tooltip_hover(
+        mut self,
+        listener: impl Fn(&bool, &mut Window, &mut App) + 'static,
+    ) -> Self {
+        self.on_conflict_tooltip_hover = Some(Box::new(listener));
+        self
+    }
 }
 
 impl RenderOnce for PrItem {
     fn render(self, window: &mut Window, _cx: &mut App) -> impl IntoElement {
         let url = self.url.clone();
         let menu_id = self.menu_id;
-        let title = truncated_title(self.title, window);
+        let title = truncated_title(self.title, self.has_conflicts, window);
+
+        let conflict_icon = if self.has_conflicts {
+            let mut tooltip = Tooltip::new(self.conflict_tooltip_id, "Merge conflicts")
+                .open(self.conflict_tooltip_open)
+                .child(
+                    Icon::new(IconName::MergeConflicts)
+                        .size(px(16.0))
+                        .color(color::status::failure()),
+                );
+            if let Some(on_hover) = self.on_conflict_tooltip_hover {
+                tooltip = tooltip.on_hover(on_hover);
+            }
+            Some(tooltip)
+        } else {
+            None
+        };
 
         let mut menu = ContextMenu::new(menu_id)
             .open(self.menu_open)
@@ -168,11 +213,18 @@ impl RenderOnce for PrItem {
                             .child(PrStatusIcon::new(self.status.clone()))
                             .child(
                                 div()
-                                    .flex_1()
+                                    .flex()
+                                    .items_center()
+                                    .gap(px(8.0))
                                     .min_w_0()
-                                    .overflow_hidden()
-                                    .whitespace_nowrap()
-                                    .child(title),
+                                    .child(
+                                        div()
+                                            .min_w_0()
+                                            .overflow_hidden()
+                                            .whitespace_nowrap()
+                                            .child(title),
+                                    )
+                                    .children(conflict_icon),
                             ),
                     )
                     .child(
