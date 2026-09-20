@@ -78,8 +78,8 @@ impl AppView {
             color::sync_system_appearance(window, cx);
             cx.notify();
         });
-        let bounds_sub = cx.observe_window_bounds(window, |_, window, _cx| {
-            window_frame::persist(window);
+        let bounds_sub = cx.observe_window_bounds(window, |_, window, cx| {
+            window_frame::persist(window, cx);
         });
         let theme_sub = cx.observe_global::<color::Theme>(|_, cx| cx.notify());
         let login = cx.new(|_| Login::new());
@@ -158,8 +158,8 @@ impl Render for AppView {
             .on_action(|_: &app_menus::Minimize, window, _| window.minimize_window())
             .on_action(|_: &app_menus::Zoom, window, _| window.zoom_window())
             .on_action(|_: &app_menus::ToggleFullScreen, window, _| window.toggle_fullscreen())
-            .on_action(|_: &app_menus::CloseWindow, window, _| {
-                window_frame::persist(window);
+            .on_action(|_: &app_menus::CloseWindow, window, cx| {
+                window_frame::persist(window, cx);
                 window.remove_window()
             })
             .on_mouse_down(
@@ -189,10 +189,12 @@ fn asset_base() -> PathBuf {
 }
 
 pub(crate) fn open_main_window(cx: &mut App) {
+    let restored = window_frame::restore(cx);
     cx.open_window(
         WindowOptions {
-            window_bounds: Some(window_frame::restored_bounds(cx)),
+            window_bounds: Some(restored.bounds),
             window_min_size: Some(window_frame::MIN_WINDOW_SIZE),
+            display_id: restored.display_id,
             titlebar: Some(TitlebarOptions {
                 appears_transparent: true,
                 ..Default::default()
