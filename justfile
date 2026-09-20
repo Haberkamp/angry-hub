@@ -126,7 +126,7 @@ release version: (_assert_release_allowed)
 
     gh release create "$tag" "$zip_path" \
         --repo "{{github_repo}}" \
-        --title "{{app_name}} ${version}" \
+        --title "$tag" \
         --generate-notes
 
     echo "Published $tag ($zip_path)"
