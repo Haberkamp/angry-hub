@@ -21,6 +21,7 @@ mod prefs;
 mod routes;
 mod session;
 mod ui;
+mod updater;
 mod views;
 
 use datasource::code_host;
@@ -81,7 +82,7 @@ impl AppView {
         let pull_requests = cx.new(|cx| PullRequests::new(chrome.clone(), window, cx));
         let activity = cx.new(|cx| Activity::new(window, cx));
         let settings = cx.new(|_| Settings::new());
-        Self {
+        let this = Self {
             router: Router::attach(
                 window,
                 cx,
@@ -90,7 +91,9 @@ impl AppView {
             notifications: NotificationList::init(cx),
             resize_generation: 0,
             _subscriptions: vec![appearance_sub, theme_sub],
-        }
+        };
+        crate::updater::check_on_launch(window, cx);
+        this
     }
 
     fn animate_restore_window(&mut self, window: &mut Window, cx: &mut Context<Self>) {
