@@ -14,7 +14,7 @@ use crate::layout::Chrome;
 use crate::model;
 use crate::prefs::Prefs;
 use crate::session::{self, Session};
-use crate::ui::{Button, MultiSelect, PrItem, SelectOption, Spinner, Tab};
+use crate::ui::{Button, MultiSelect, Notification, PrItem, SelectOption, Spinner, Tab, WindowExt};
 
 enum PrsState {
     Loading,
@@ -445,7 +445,7 @@ impl Render for PullRequests {
                                 .on_copy_branch({
                                     let branch = pr.branch.clone();
                                     let entity = cx.entity();
-                                    move |_, app| {
+                                    move |window, app| {
                                         entity.update(app, |this, cx| {
                                             cx.write_to_clipboard(ClipboardItem::new_string(
                                                 branch.clone(),
@@ -453,6 +453,10 @@ impl Render for PullRequests {
                                             this.pr_menu_open = None;
                                             cx.notify();
                                         });
+                                        window.push_notification(
+                                            Notification::new().message("Copied branch name"),
+                                            app,
+                                        );
                                     }
                                 })
                                 .on_close_pr({

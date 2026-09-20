@@ -24,6 +24,7 @@ mod views;
 
 use datasource::code_host;
 use session::Session;
+use ui::NotificationList;
 use views::activity::Activity;
 use views::login::Login;
 use views::pull_requests::PullRequests;
@@ -61,6 +62,7 @@ impl AssetSource for Assets {
 
 struct AppView {
     router: gpui::Entity<Router>,
+    notifications: gpui::Entity<NotificationList>,
     resize_generation: u64,
 }
 
@@ -77,6 +79,7 @@ impl AppView {
                 cx,
                 routes::routes(login, pull_requests, activity, settings, chrome),
             ),
+            notifications: NotificationList::init(cx),
             resize_generation: 0,
         }
     }
@@ -130,6 +133,7 @@ impl Render for AppView {
             .bg(color::gray::s1())
             .text_color(color::gray::s12())
             .child(self.router.clone())
+            .child(self.notifications.clone())
             .on_mouse_down(
                 gpui::MouseButton::Left,
                 cx.listener(|this, event: &MouseDownEvent, window, cx| {
