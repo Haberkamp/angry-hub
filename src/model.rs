@@ -21,10 +21,10 @@ impl PrStatus {
 
     pub fn color(&self) -> gpui::Hsla {
         match self {
-            PrStatus::Open => crate::color::green::s9(),
-            PrStatus::Draft => crate::color::gray::s9(),
-            PrStatus::Closed => crate::color::red::s9(),
-            PrStatus::Merged => crate::color::violet::s11(),
+            PrStatus::Open => crate::color::status::open(),
+            PrStatus::Draft => crate::color::status::draft(),
+            PrStatus::Closed => crate::color::status::closed(),
+            PrStatus::Merged => crate::color::status::merged(),
         }
     }
 }
@@ -40,10 +40,10 @@ pub enum CiStatus {
 impl CiStatus {
     pub fn color(&self) -> gpui::Hsla {
         match self {
-            CiStatus::Success => crate::color::green::s9(),
-            CiStatus::Failure => crate::color::red::s9(),
-            CiStatus::Pending => crate::color::blue::s8(),
-            CiStatus::None => crate::color::gray::s9(),
+            CiStatus::Success => crate::color::status::success(),
+            CiStatus::Failure => crate::color::status::failure(),
+            CiStatus::Pending => crate::color::status::pending(),
+            CiStatus::None => crate::color::status::none(),
         }
     }
 }
@@ -98,12 +98,12 @@ impl ActivityKind {
 
     pub fn color(&self) -> gpui::Hsla {
         match self {
-            ActivityKind::Merged => crate::color::violet::s11(),
-            ActivityKind::Closed => crate::color::red::s9(),
-            ActivityKind::Reopened => crate::color::green::s9(),
-            ActivityKind::Comment => crate::color::blue::s9(),
-            ActivityKind::Approved => crate::color::green::s9(),
-            ActivityKind::ChangesRequested => crate::color::red::s9(),
+            ActivityKind::Merged => crate::color::status::merged(),
+            ActivityKind::Closed => crate::color::status::closed(),
+            ActivityKind::Reopened => crate::color::status::reopened(),
+            ActivityKind::Comment => crate::color::status::comment(),
+            ActivityKind::Approved => crate::color::status::approved(),
+            ActivityKind::ChangesRequested => crate::color::status::changes_requested(),
         }
     }
 }
