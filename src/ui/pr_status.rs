@@ -23,8 +23,8 @@ impl PrStatusIcon {
 }
 
 impl RenderOnce for PrStatusIcon {
-    fn render(self, _window: &mut Window, _cx: &mut gpui::App) -> impl IntoElement {
-        let color = self.status.color();
+    fn render(self, _window: &mut Window, cx: &mut gpui::App) -> impl IntoElement {
+        let color = self.status.color(cx);
         Icon::new(self.icon()).size(px(20.0)).color(color)
     }
 }
@@ -50,13 +50,13 @@ impl CiStatusIcon {
 }
 
 impl RenderOnce for CiStatusIcon {
-    fn render(self, _window: &mut Window, _cx: &mut gpui::App) -> impl IntoElement {
+    fn render(self, _window: &mut Window, cx: &mut gpui::App) -> impl IntoElement {
         if self.status == CiStatus::None {
             return gpui::div().into_any_element();
         }
         Icon::new(self.icon())
             .size(px(14.0))
-            .color(self.status.color())
+            .color(self.status.color(cx))
             .into_any_element()
     }
 }
@@ -84,9 +84,9 @@ impl ActivityKindIcon {
 }
 
 impl RenderOnce for ActivityKindIcon {
-    fn render(self, _window: &mut Window, _cx: &mut gpui::App) -> impl IntoElement {
+    fn render(self, _window: &mut Window, cx: &mut gpui::App) -> impl IntoElement {
         Icon::new(self.icon())
             .size(px(20.0))
-            .color(self.kind.color())
+            .color(self.kind.color(cx))
     }
 }

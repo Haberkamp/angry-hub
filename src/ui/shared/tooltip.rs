@@ -133,6 +133,7 @@ impl Element for OpenPresence {
                     self.label.clone(),
                     self.offset,
                     open,
+                    cx,
                 ));
             }
 
@@ -181,14 +182,15 @@ fn tooltip_bubble(
     label: SharedString,
     rest: f32,
     open: bool,
+    cx: &App,
 ) -> AnyElement {
     let animation_id = SharedString::from(format!(
         "{}-{}",
         tooltip_id,
         if open { "enter" } else { "exit" }
     ));
-    let bg = color::gray::s12();
-    let fg = color::gray::s1();
+    let bg = color::surface::inverse(cx);
+    let fg = color::text::inverse(cx);
 
     div()
         .id(tooltip_id)

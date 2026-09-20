@@ -33,25 +33,25 @@ struct ButtonStyle {
 }
 
 impl ButtonVariant {
-    fn style(self) -> ButtonStyle {
+    fn style(self, cx: &App) -> ButtonStyle {
         match self {
             ButtonVariant::Primary => ButtonStyle {
-                bg: color::gray::s12(),
-                hover_bg: color::gray::s11(),
-                active_bg: color::gray::s10(),
-                text: color::gray::s1(),
+                bg: color::button::primary::bg(cx),
+                hover_bg: color::button::primary::bg_hover(cx),
+                active_bg: color::button::primary::bg_active(cx),
+                text: color::button::primary::fg(cx),
             },
             ButtonVariant::Tertiary => ButtonStyle {
-                bg: color::gray::s1(),
-                hover_bg: color::gray::s3(),
-                active_bg: color::gray::s4(),
-                text: color::gray::s9(),
+                bg: color::surface::default(cx),
+                hover_bg: color::interaction::hovered(cx),
+                active_bg: color::interaction::pressed(cx),
+                text: color::icon::subtle(cx),
             },
             ButtonVariant::Destructive => ButtonStyle {
-                bg: color::red::s9(),
-                hover_bg: color::red::s10(),
-                active_bg: color::red::s11(),
-                text: color::white(),
+                bg: color::button::danger::bg(cx),
+                hover_bg: color::button::danger::bg_hover(cx),
+                active_bg: color::button::danger::bg_active(cx),
+                text: color::button::danger::fg(),
             },
         }
     }
@@ -109,8 +109,8 @@ impl Button {
 }
 
 impl RenderOnce for Button {
-    fn render(self, _window: &mut Window, _cx: &mut App) -> impl IntoElement {
-        let style = self.variant.style();
+    fn render(self, _window: &mut Window, cx: &mut App) -> impl IntoElement {
+        let style = self.variant.style(cx);
         let label = self.label.clone();
         let icon = self.icon.clone().map(|icon| icon.color(style.text));
         let is_loading = self.is_loading;

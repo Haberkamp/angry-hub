@@ -19,12 +19,12 @@ impl PrStatus {
         }
     }
 
-    pub fn color(&self) -> gpui::Hsla {
+    pub fn color(&self, cx: &gpui::App) -> gpui::Hsla {
         match self {
-            PrStatus::Open => crate::color::status::open(),
-            PrStatus::Draft => crate::color::status::draft(),
-            PrStatus::Closed => crate::color::status::closed(),
-            PrStatus::Merged => crate::color::status::merged(),
+            PrStatus::Open => crate::color::status::open(cx),
+            PrStatus::Draft => crate::color::status::draft(cx),
+            PrStatus::Closed => crate::color::status::closed(cx),
+            PrStatus::Merged => crate::color::status::merged(cx),
         }
     }
 }
@@ -38,12 +38,12 @@ pub enum CiStatus {
 }
 
 impl CiStatus {
-    pub fn color(&self) -> gpui::Hsla {
+    pub fn color(&self, cx: &gpui::App) -> gpui::Hsla {
         match self {
-            CiStatus::Success => crate::color::status::success(),
-            CiStatus::Failure => crate::color::status::failure(),
-            CiStatus::Pending => crate::color::status::pending(),
-            CiStatus::None => crate::color::status::none(),
+            CiStatus::Success => crate::color::status::success(cx),
+            CiStatus::Failure => crate::color::status::failure(cx),
+            CiStatus::Pending => crate::color::status::pending(cx),
+            CiStatus::None => crate::color::status::none(cx),
         }
     }
 }
@@ -100,14 +100,14 @@ impl ActivityKind {
         }
     }
 
-    pub fn color(&self) -> gpui::Hsla {
+    pub fn color(&self, cx: &gpui::App) -> gpui::Hsla {
         match self {
-            ActivityKind::Merged => crate::color::status::merged(),
-            ActivityKind::Closed => crate::color::status::closed(),
-            ActivityKind::Reopened => crate::color::status::reopened(),
-            ActivityKind::Comment => crate::color::status::comment(),
-            ActivityKind::Approved => crate::color::status::approved(),
-            ActivityKind::ChangesRequested => crate::color::status::changes_requested(),
+            ActivityKind::Merged => crate::color::status::merged(cx),
+            ActivityKind::Closed => crate::color::status::closed(cx),
+            ActivityKind::Reopened => crate::color::status::reopened(cx),
+            ActivityKind::Comment => crate::color::status::comment(cx),
+            ActivityKind::Approved => crate::color::status::approved(cx),
+            ActivityKind::ChangesRequested => crate::color::status::changes_requested(cx),
         }
     }
 }

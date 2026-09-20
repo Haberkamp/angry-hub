@@ -195,13 +195,23 @@ impl MultiSelect {
 }
 
 impl RenderOnce for MultiSelect {
-    fn render(self, window: &mut Window, _cx: &mut App) -> impl IntoElement {
+    fn render(self, window: &mut Window, cx: &mut App) -> impl IntoElement {
         let open = self.open;
         let trigger_bg = if open {
-            color::gray::s4()
+            color::interaction::pressed(cx)
         } else {
-            color::gray::s3()
+            color::surface::sunken(cx)
         };
+        let trigger_hover = color::interaction::pressed(cx);
+        let chevron = color::icon::subtle(cx);
+        let overlay_bg = color::surface::overlay(cx);
+        let overlay_border = color::border::default(cx);
+        let row_hover = color::interaction::pressed(cx);
+        let selected_fill = color::bg::selected(cx);
+        let selected_icon = color::icon::on_solid(cx);
+        let unselected_bg = color::surface::sunken(cx);
+        let unselected_border = color::border::strong(cx);
+        let option_text = color::text::primary(cx);
         let on_toggle_option = self.on_toggle_option;
         let viewport = window.viewport_size();
 
@@ -213,13 +223,13 @@ impl RenderOnce for MultiSelect {
             .items_center()
             .justify_center()
             .bg(trigger_bg)
-            .hover(|this| this.bg(color::gray::s4()))
+            .hover(|this| this.bg(trigger_hover))
             .rounded_full()
             .cursor_pointer()
             .child(
                 Icon::new(IconName::ChevronDown)
                     .size(px(14.0))
-                    .color(color::gray::s9()),
+                    .color(chevron),
             );
 
         if let Some(on_toggle_open) = self.on_toggle_open {
@@ -260,9 +270,9 @@ impl RenderOnce for MultiSelect {
             .flex()
             .flex_col()
             .p_1()
-            .bg(color::white())
+            .bg(overlay_bg)
             .border_1()
-            .border_color(color::gray::s6())
+            .border_color(overlay_border)
             .rounded(px(9.0))
             .shadow_md()
             .occlude()
@@ -285,7 +295,7 @@ impl RenderOnce for MultiSelect {
                             .items_center()
                             .gap_2()
                             .cursor_pointer()
-                            .hover(|this| this.bg(color::gray::s4()))
+                            .hover(|this| this.bg(row_hover))
                             .child(
                                 div()
                                     .size(px(14.0))
@@ -295,22 +305,27 @@ impl RenderOnce for MultiSelect {
                                     .rounded_sm()
                                     .border_1()
                                     .border_color(if selected {
-                                        color::blue::s9()
+                                        selected_fill
                                     } else {
-                                        color::gray::s8()
+                                        unselected_border
+                                    })
+                                    .bg(if selected {
+                                        selected_fill
+                                    } else {
+                                        unselected_bg
                                     })
                                     .when(selected, |this| {
-                                        this.bg(color::blue::s9()).child(
+                                        this.child(
                                             Icon::new(IconName::CiCheck)
                                                 .size(px(10.0))
-                                                .color(color::gray::s1()),
+                                                .color(selected_icon),
                                         )
                                     }),
                             )
                             .child(
                                 div()
                                     .text_size(px(13.0))
-                                    .text_color(color::gray::s12())
+                                    .text_color(option_text)
                                     .whitespace_nowrap()
                                     .child(option.label),
                             );

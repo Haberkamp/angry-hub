@@ -21,8 +21,9 @@ pub fn routes(
             routes
                 .layout({
                     let chrome = chrome.clone();
+                    let settings = settings.clone();
                     move |route: RouteContext, window: &mut Window, cx: &mut App| {
-                        main_layout(chrome.clone(), route, window, cx)
+                        main_layout(chrome.clone(), settings.clone(), route, window, cx)
                     }
                 })
                 .index(move || pull_requests.clone())

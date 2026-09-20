@@ -88,6 +88,9 @@ impl Activity {
 
 impl Render for Activity {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+        let row_hover = color::interaction::hovered(cx);
+        let headline_color = color::text::primary(cx);
+        let meta = color::text::secondary(cx);
         if !cx.global::<Session>().logged_in {
             self.activity = ActivityState::Loading;
             self.fetch_in_flight = false;
@@ -107,7 +110,7 @@ impl Render for Activity {
             ],
             ActivityState::Failed(e) => vec![
                 div()
-                    .text_color(color::red::s9())
+                    .text_color(color::text::danger(cx))
                     .child(e.to_string())
                     .into_any_element(),
                 Button::new("retry-activity", "Retry")
@@ -170,7 +173,7 @@ impl Render for Activity {
                                 .py_2()
                                 .px_3()
                                 .rounded_md()
-                                .hover(|this| this.bg(color::gray::s3()))
+                                .hover(|this| this.bg(row_hover))
                                 .cursor_pointer()
                                 .on_click(move |_, _window, cx| cx.open_url(&url))
                                 .child(
@@ -188,7 +191,7 @@ impl Render for Activity {
                                                 .gap(px(4.0))
                                                 .min_w_0()
                                                 .overflow_hidden()
-                                                .text_color(color::gray::s12())
+                                                .text_color(headline_color)
                                                 .when(show_avatar, |this| {
                                                     this.child(
                                                         Avatar::new(item.avatar_url.clone())
@@ -211,7 +214,7 @@ impl Render for Activity {
                                         .gap(px(4.0))
                                         .ml(px(28.0))
                                         .text_size(px(12.0))
-                                        .text_color(color::gray::s10())
+                                        .text_color(meta)
                                         .child(item.repo.clone())
                                         .child(number),
                                 )

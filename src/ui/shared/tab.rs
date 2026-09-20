@@ -37,18 +37,19 @@ impl Tab {
         self
     }
 
-    fn colors(&self) -> (Hsla, Hsla) {
+    fn colors(&self, cx: &App) -> (Hsla, Hsla) {
         if self.selected {
-            (color::gray::s4(), color::gray::s12())
+            (color::interaction::pressed(cx), color::text::primary(cx))
         } else {
-            (color::gray::s3(), color::gray::s9())
+            (color::surface::sunken(cx), color::text::secondary(cx))
         }
     }
 }
 
 impl RenderOnce for Tab {
-    fn render(self, _window: &mut Window, _cx: &mut App) -> impl IntoElement {
-        let (bg, text) = self.colors();
+    fn render(self, _window: &mut Window, cx: &mut App) -> impl IntoElement {
+        let (bg, text) = self.colors(cx);
+        let hover = color::interaction::pressed(cx);
         let label = self.label.clone();
         let mut element = div()
             .id(self.id)
@@ -60,7 +61,7 @@ impl RenderOnce for Tab {
             .items_center()
             .justify_center()
             .bg(bg)
-            .hover(|this| this.bg(color::gray::s4()))
+            .hover(|this| this.bg(hover))
             .rounded_full()
             .cursor_pointer()
             .text_size(px(13.0))

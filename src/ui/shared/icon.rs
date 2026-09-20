@@ -74,11 +74,11 @@ impl Icon {
 }
 
 impl RenderOnce for Icon {
-    fn render(self, _window: &mut Window, _cx: &mut App) -> impl IntoElement {
+    fn render(self, _window: &mut Window, cx: &mut App) -> impl IntoElement {
         let size = self.size.unwrap_or_else(|| px(16.0));
         // GPUI only paints an `svg()` when `style.text.color` is set on that
         // element itself — parent `text_color` is not enough.
-        let color = self.color.unwrap_or_else(color::gray::s12);
+        let color = self.color.unwrap_or_else(|| color::icon::default(cx));
         svg()
             .path(self.name.path())
             .size(size)

@@ -10,7 +10,7 @@ pub const SPINNER_PATH: &str = "icons/spinner.svg";
 pub struct Spinner {
     id: SharedString,
     size: Pixels,
-    color: Hsla,
+    color: Option<Hsla>,
 }
 
 impl Spinner {
@@ -18,7 +18,7 @@ impl Spinner {
         Self {
             id: id.into(),
             size: px(16.0),
-            color: color::gray::s10(),
+            color: None,
         }
     }
 
@@ -30,18 +30,19 @@ impl Spinner {
 
     #[allow(dead_code)]
     pub fn color(mut self, color: impl Into<Hsla>) -> Self {
-        self.color = color.into();
+        self.color = Some(color.into());
         self
     }
 }
 
 impl RenderOnce for Spinner {
-    fn render(self, _window: &mut Window, _cx: &mut App) -> impl IntoElement {
+    fn render(self, _window: &mut Window, cx: &mut App) -> impl IntoElement {
+        let color = self.color.unwrap_or_else(|| color::icon::subtle(cx));
         svg()
             .path(SPINNER_PATH)
             .size(self.size)
             .flex_none()
-            .text_color(self.color)
+            .text_color(color)
             .with_animation(
                 self.id,
                 Animation::new(std::time::Duration::from_millis(900)).repeat(),
