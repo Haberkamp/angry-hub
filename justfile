@@ -9,6 +9,7 @@ github_repo := "Haberkamp/angry-hub"
 codesign_identity := "Developer ID Application: Nils Haberkamp (7SG72YY7UD)"
 notary_profile := "angry-hub-notary"
 app_name := "Angry Hub"
+bundle_identifier := "dev.haberkamp.angryhub"
 entitlements := "assets/macos/entitlements.plist"
 
 # Format Rust sources.
@@ -100,6 +101,7 @@ release version: (_assert_release_allowed)
 
     bin="$app_dir/Contents/MacOS/angry-hub"
     codesign --force --timestamp --options runtime \
+        --identifier "{{bundle_identifier}}" \
         --entitlements "{{entitlements}}" \
         --sign "{{codesign_identity}}" \
         "$bin"
@@ -107,7 +109,7 @@ release version: (_assert_release_allowed)
         --entitlements "{{entitlements}}" \
         --sign "{{codesign_identity}}" \
         "$app_dir"
-    codesign --verify --deep --strict --verbose=2 "$app_dir"
+    codesign --verify --strict --verbose=2 "$app_dir"
 
     rm -f "$zip_path"
     ditto -c -k --keepParent "$app_dir" "$zip_path"
