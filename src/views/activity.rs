@@ -3,17 +3,17 @@ use std::time::Duration;
 
 use gpui::{Context, Render, Subscription, Timer, Window, div, prelude::*, px};
 
-use crate::color;
-use crate::datasource::code_host;
-use crate::model;
+use crate::code_host::code_host;
+use crate::models;
 use crate::session::{self, Session};
+use crate::ui::color;
 use crate::ui::{
     ActivityKindIcon, Avatar, Button, Spinner, list_text_max_width, measure_line, truncate_line,
 };
 
 enum ActivityState {
     Loading,
-    Loaded(Vec<model::ActivityItem>),
+    Loaded(Vec<models::ActivityItem>),
     Failed(Arc<str>),
 }
 
@@ -25,8 +25,16 @@ pub struct Activity {
 
 impl Activity {
     pub fn new(window: &mut Window, cx: &mut Context<Self>) -> Self {
+        let activity = if cx.global::<Session>().logged_in {
+            match code_host().activity_snapshot() {
+                Some(items) => ActivityState::Loaded(items),
+                None => ActivityState::Loading,
+            }
+        } else {
+            ActivityState::Loading
+        };
         let mut view = Self {
-            activity: ActivityState::Loading,
+            activity,
             fetch_in_flight: false,
             _activation_subscription: None,
         };
@@ -133,21 +141,21 @@ impl Render for Activity {
                             let number = format!("#{}", item.number);
                             let show_avatar = matches!(
                                 item.kind,
-                                model::ActivityKind::Comment
-                                    | model::ActivityKind::Approved
-                                    | model::ActivityKind::ChangesRequested
+                                models::ActivityKind::Comment
+                                    | models::ActivityKind::Approved
+                                    | models::ActivityKind::ChangesRequested
                             );
                             let prefix = match item.kind {
-                                model::ActivityKind::Merged => "Merged ".to_string(),
-                                model::ActivityKind::Closed => "Closed ".to_string(),
-                                model::ActivityKind::Reopened => "Reopened ".to_string(),
-                                model::ActivityKind::Comment => {
+                                models::ActivityKind::Merged => "Merged ".to_string(),
+                                models::ActivityKind::Closed => "Closed ".to_string(),
+                                models::ActivityKind::Reopened => "Reopened ".to_string(),
+                                models::ActivityKind::Comment => {
                                     format!("{} commented on ", item.actor)
                                 }
-                                model::ActivityKind::Approved => {
+                                models::ActivityKind::Approved => {
                                     format!("{} approved ", item.actor)
                                 }
-                                model::ActivityKind::ChangesRequested => {
+                                models::ActivityKind::ChangesRequested => {
                                     format!("{} requested changes on ", item.actor)
                                 }
                             };

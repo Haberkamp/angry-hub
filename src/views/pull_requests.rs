@@ -7,18 +7,17 @@ use gpui::{
     Timer, Window, div, prelude::*,
 };
 
-use crate::color;
-use crate::datasource::code_host;
-use crate::github::PrsCache;
+use crate::code_host::code_host;
+use crate::json_file;
 use crate::layout::Chrome;
-use crate::model;
-use crate::prefs::Prefs;
+use crate::models;
 use crate::session::{self, Session};
+use crate::ui::color;
 use crate::ui::{Button, MultiSelect, Notification, PrItem, SelectOption, Spinner, Tab, WindowExt};
 
 enum PrsState {
     Loading,
-    Loaded(Vec<model::PullRequest>),
+    Loaded(Vec<models::PullRequest>),
     Failed(Arc<str>),
 }
 
@@ -36,12 +35,25 @@ pub struct PullRequests {
     _activation_subscription: Option<Subscription>,
 }
 
+fn load_visible_tab_repos() -> Option<HashSet<String>> {
+    if let Some(repos) = json_file::load::<Vec<String>>("visible_tab_repos.json") {
+        return Some(repos.into_iter().collect());
+    }
+    #[derive(serde::Deserialize)]
+    struct LegacyPrefs {
+        visible_tab_repos: Option<Vec<String>>,
+    }
+    json_file::load::<LegacyPrefs>("prefs.json")
+        .and_then(|stored| stored.visible_tab_repos)
+        .map(|repos| repos.into_iter().collect())
+}
+
 impl PullRequests {
     pub fn new(chrome: Entity<Chrome>, window: &mut Window, cx: &mut Context<Self>) -> Self {
         let prs = if cx.global::<Session>().logged_in {
-            match PrsCache::load() {
-                Some(prs) if !prs.is_empty() => PrsState::Loaded(prs),
-                _ => PrsState::Loading,
+            match code_host().pull_request_snapshot() {
+                Some(prs) => PrsState::Loaded(prs),
+                None => PrsState::Loading,
             }
         } else {
             PrsState::Loading
@@ -49,7 +61,7 @@ impl PullRequests {
         let mut view = Self {
             prs,
             selected_repo: Some("all".into()),
-            visible_tab_repos: Prefs::load_visible_tab_repos(),
+            visible_tab_repos: load_visible_tab_repos(),
             visibility_menu_open: false,
             pr_menu_open: None,
             closing_pr: None,
@@ -158,7 +170,11 @@ impl PullRequests {
         if self.selected_repo.as_deref() == Some(repo) {
             self.selected_repo = Some("all".into());
         }
-        Prefs::save_visible_tab_repos(&visible);
+        json_file::save("visible_tab_repos.json", &{
+            let mut repos: Vec<String> = visible.iter().cloned().collect();
+            repos.sort();
+            repos
+        });
         self.visible_tab_repos = Some(visible);
         cx.notify();
     }
@@ -307,7 +323,7 @@ impl Render for PullRequests {
                     .into_any_element(),
             ],
             PrsState::Loaded(prs) => {
-                let active: Vec<&model::PullRequest> = prs.iter().collect();
+                let active: Vec<&models::PullRequest> = prs.iter().collect();
 
                 let repos: Vec<Arc<str>> = {
                     let mut seen: Vec<Arc<str>> = Vec::new();
@@ -332,7 +348,7 @@ impl Render for PullRequests {
                     .filter(|r| tab_repos.contains(r) || r.as_ref() == "all")
                     .or_else(|| Some("all".into()));
 
-                let mut visible: Vec<&model::PullRequest> = active
+                let mut visible: Vec<&models::PullRequest> = active
                     .iter()
                     .copied()
                     .filter(|pr| self.repo_tab_visible(&pr.repo))

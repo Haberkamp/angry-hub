@@ -3,9 +3,9 @@ use std::sync::Arc;
 use gpui::{ClipboardItem, Context, FontWeight, Render, Window, div, prelude::*, px};
 use rooter::Router;
 
-use crate::color;
-use crate::datasource::code_host;
+use crate::code_host::code_host;
 use crate::session::Session;
+use crate::ui::color;
 use crate::ui::{Button, Icon, IconName, Tooltip};
 
 const OTP_TOOLTIP: &str = "Click to copy";

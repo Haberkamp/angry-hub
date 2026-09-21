@@ -1,8 +1,8 @@
 use gpui::{AnyElement, App, Context, Entity, Render, Window, div, prelude::*, px};
 use rooter::{Outlet, RouteContext, Router};
 
-use crate::color;
 use crate::layout::INACTIVE_HEADER_OPACITY;
+use crate::ui::color;
 use crate::ui::{Icon, IconName, Segment, SegmentedControl, Spinner};
 use crate::views::settings::Settings;
 

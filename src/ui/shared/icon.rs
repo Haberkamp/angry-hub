@@ -1,4 +1,4 @@
-use crate::color;
+use crate::ui::color;
 use gpui::{App, Hsla, IntoElement, Pixels, RenderOnce, Styled, Window, px, svg};
 
 #[derive(Clone, Copy)]

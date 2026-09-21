@@ -1,6 +1,6 @@
 use std::time::{Duration, Instant};
 
-use crate::color;
+use crate::ui::color;
 use gpui::{
     AlignContent, AlignItems, Animation, AnimationExt as _, AnyElement, App, Bounds, Context,
     Display, Element, ElementId, FlexDirection, Global, GlobalElementId, InspectorElementId,

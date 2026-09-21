@@ -1,7 +1,7 @@
 use gpui::{App, Context, FontWeight, PromptLevel, Render, Window, div, prelude::*, px};
 
-use crate::color::{self, ThemePreference};
 use crate::session;
+use crate::ui::color::{self, ThemePreference};
 use crate::ui::{Button, Icon, IconName, Segment, SegmentedControl};
 
 pub struct Settings {
@@ -12,7 +12,7 @@ pub struct Settings {
 impl Settings {
     pub fn new() -> Self {
         Self {
-            previous_theme: crate::prefs::Prefs::load_theme().as_id().into(),
+            previous_theme: color::load_preference().as_id().into(),
             on_page: false,
         }
     }

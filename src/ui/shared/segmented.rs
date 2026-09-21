@@ -1,7 +1,7 @@
 use std::sync::Arc;
 use std::time::Duration;
 
-use crate::color;
+use crate::ui::color;
 use gpui::{
     Animation, AnimationExt as _, AnyElement, App, ClickEvent, InteractiveElement, IntoElement,
     ParentElement, RenderOnce, SharedString, Styled, Window, div, ease_out_quint, prelude::*, px,

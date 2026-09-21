@@ -2,7 +2,7 @@ use std::cell::Cell;
 use std::rc::Rc;
 use std::time::{Duration, Instant};
 
-use crate::color;
+use crate::ui::color;
 use gpui::{
     Animation, AnimationExt as _, AnyElement, App, Bounds, Element, ElementId, GlobalElementId,
     InspectorElementId, InteractiveElement, IntoElement, LayoutId, ParentElement, Pixels,

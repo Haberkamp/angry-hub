@@ -1,4 +1,4 @@
-use crate::color;
+use crate::ui::color;
 use gpui::{
     App, ClickEvent, Hsla, InteractiveElement, IntoElement, ParentElement, RenderOnce,
     SharedString, Styled, Window, div, prelude::*, px,

@@ -1,7 +1,7 @@
 use gpui::{App, Global, Window};
 use rooter::Router;
 
-use crate::datasource::code_host;
+use crate::code_host::code_host;
 
 #[derive(Default)]
 pub struct Session {

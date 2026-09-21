@@ -2,6 +2,9 @@ mod pr_item;
 mod pr_status;
 mod shared;
 
+pub mod color;
+pub mod window;
+
 pub use pr_item::PrItem;
 pub use pr_status::ActivityKindIcon;
 pub use shared::{

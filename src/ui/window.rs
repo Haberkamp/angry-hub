@@ -1,4 +1,3 @@
-use std::path::PathBuf;
 use std::rc::Rc;
 
 use gpui::{
@@ -39,24 +38,12 @@ pub struct RestoredWindow {
     pub display_id: Option<DisplayId>,
 }
 
-fn frame_path() -> PathBuf {
-    dirs::config_dir()
-        .unwrap_or_else(|| PathBuf::from("."))
-        .join("angry-hub")
-        .join("window.json")
-}
-
 fn load() -> Option<Frame> {
-    let contents = std::fs::read_to_string(frame_path()).ok()?;
-    serde_json::from_str(&contents).ok()
+    crate::json_file::load("window.json")
 }
 
 fn save(frame: Frame) {
-    let path = frame_path();
-    let _ = std::fs::create_dir_all(path.parent().unwrap());
-    if let Ok(json) = serde_json::to_string_pretty(&frame) {
-        let _ = std::fs::write(path, json);
-    }
+    crate::json_file::save("window.json", &frame);
 }
 
 fn from_bounds(bounds: WindowBounds, display: Option<&dyn PlatformDisplay>) -> Frame {

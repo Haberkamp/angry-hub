@@ -1,4 +1,4 @@
-use crate::color;
+use crate::ui::color;
 use gpui::{
     Animation, AnimationExt, App, Hsla, IntoElement, Pixels, Radians, RenderOnce, SharedString,
     Styled, Transformation, Window, px, svg,

@@ -1,5 +1,5 @@
 use super::shared::{Icon, IconName};
-use crate::model::{ActivityKind, CiStatus, PrStatus};
+use crate::models::{ActivityKind, CiStatus, PrStatus};
 use gpui::{IntoElement, RenderOnce, Window, px};
 
 #[derive(Clone, IntoElement)]

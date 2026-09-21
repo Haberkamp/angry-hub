@@ -13,23 +13,22 @@ use rooter::Router;
 
 mod app_menus;
 mod auth;
-mod color;
-mod datasource;
-mod github;
+mod code_host;
 mod http;
+mod json_file;
 mod layout;
-mod model;
-mod prefs;
+mod models;
 mod routes;
 mod session;
 mod ui;
 mod updater;
 mod views;
-mod window_frame;
 
-use datasource::code_host;
+use code_host::code_host;
 use session::Session;
 use ui::NotificationList;
+use ui::color;
+use ui::window;
 use views::activity::Activity;
 use views::login::Login;
 use views::pull_requests::PullRequests;
@@ -86,7 +85,7 @@ impl AppView {
             cx.notify();
         });
         let bounds_sub = cx.observe_window_bounds(window, |_, window, cx| {
-            window_frame::persist(window, cx);
+            window::persist(window, cx);
         });
         let theme_sub = cx.observe_global::<color::Theme>(|_, cx| cx.notify());
         let login = cx.new(|_| Login::new());
@@ -122,7 +121,7 @@ impl AppView {
 
     fn animate_restore_window(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         let from = window.viewport_size();
-        let to = window_frame::DEFAULT_WINDOW_SIZE;
+        let to = window::DEFAULT_WINDOW_SIZE;
         if from == to {
             return;
         }
@@ -193,7 +192,7 @@ impl Render for AppView {
                     .update(cx, |activity, cx| activity.refresh_activity(window, cx));
             }))
             .on_action(|_: &app_menus::CloseWindow, window, cx| {
-                window_frame::persist(window, cx);
+                window::persist(window, cx);
                 window.remove_window()
             })
             .on_mouse_down(
@@ -223,11 +222,11 @@ fn asset_base() -> PathBuf {
 }
 
 pub(crate) fn open_main_window(cx: &mut App) {
-    let restored = window_frame::restore(cx);
+    let restored = window::restore(cx);
     cx.open_window(
         WindowOptions {
             window_bounds: Some(restored.bounds),
-            window_min_size: Some(window_frame::MIN_WINDOW_SIZE),
+            window_min_size: Some(window::MIN_WINDOW_SIZE),
             display_id: restored.display_id,
             titlebar: Some(TitlebarOptions {
                 appears_transparent: true,

@@ -3,7 +3,7 @@ use std::rc::Rc;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
-use crate::color;
+use crate::ui::color;
 use gpui::{
     AnchoredPositionMode, Animation, AnimationExt as _, AnyElement, App, Bounds, ClickEvent,
     Corner, Display, Element, ElementId, GlobalElementId, InspectorElementId, InteractiveElement,

@@ -142,6 +142,20 @@ impl Theme {
     }
 }
 
+pub(crate) fn load_preference() -> ThemePreference {
+    if let Some(preference) = crate::json_file::load("theme.json") {
+        return preference;
+    }
+    #[derive(serde::Deserialize)]
+    struct LegacyPrefs {
+        #[serde(default)]
+        theme: ThemePreference,
+    }
+    crate::json_file::load::<LegacyPrefs>("prefs.json")
+        .map(|stored| stored.theme)
+        .unwrap_or_default()
+}
+
 fn appearance_is_dark(appearance: WindowAppearance) -> bool {
     matches!(
         appearance,
@@ -151,7 +165,7 @@ fn appearance_is_dark(appearance: WindowAppearance) -> bool {
 
 pub fn init_theme(window: &Window, cx: &mut App) {
     cx.set_global(Theme {
-        preference: crate::prefs::Prefs::load_theme(),
+        preference: load_preference(),
         system_dark: appearance_is_dark(window.appearance()),
     });
 }
@@ -170,7 +184,7 @@ pub fn sync_system_appearance(window: &Window, cx: &mut App) {
 }
 
 pub fn set_preference(preference: ThemePreference, cx: &mut App) {
-    crate::prefs::Prefs::save_theme(preference);
+    crate::json_file::save("theme.json", &preference);
     let system_dark = cx
         .try_global::<Theme>()
         .map(|t| t.system_dark)

@@ -1,10 +1,12 @@
 use std::sync::{Arc, OnceLock};
 
-use crate::model::{ActivityItem, DeviceCode, PullRequest};
+use crate::models::{ActivityItem, DeviceCode, PullRequest};
+
+mod github;
 
 pub fn code_host() -> Arc<dyn CodeHost> {
     static HOST: OnceLock<Arc<dyn CodeHost>> = OnceLock::new();
-    HOST.get_or_init(|| Arc::new(crate::github::GithubApi::new()))
+    HOST.get_or_init(|| Arc::new(github::GithubHost::new()))
         .clone()
 }
 
@@ -60,11 +62,19 @@ pub trait CodeHost: Send + Sync {
 
     fn await_login(&self, code: &DeviceCode) -> DataSourceResult<AuthSuccess>;
 
+    fn pull_request_snapshot(&self) -> Option<Vec<PullRequest>> {
+        None
+    }
+
     fn my_pull_requests(&self) -> DataSourceResult<Vec<PullRequest>>;
 
     fn close_pull_request(&self, id: &str) -> DataSourceResult<()>;
 
     fn oauth_app_restricted_from_repo(&self, name_with_owner: &str) -> DataSourceResult<bool>;
+
+    fn activity_snapshot(&self) -> Option<Vec<ActivityItem>> {
+        None
+    }
 
     fn my_pr_activity(&self) -> DataSourceResult<Vec<ActivityItem>>;
 

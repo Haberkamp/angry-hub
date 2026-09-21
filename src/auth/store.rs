@@ -6,7 +6,6 @@
 //! silently dropped and a restart looks logged out. The login keychain is
 //! available to all apps and shows up in Keychain Access.
 
-use std::path::PathBuf;
 use std::sync::Mutex;
 
 #[cfg(target_os = "macos")]
@@ -160,11 +159,7 @@ fn persist_clear() {
 }
 
 fn delete_legacy_token_file() {
-    let path = dirs::config_dir()
-        .unwrap_or_else(|| PathBuf::from("."))
-        .join("angry-hub")
-        .join("token.json");
-    let _ = std::fs::remove_file(path);
+    crate::json_file::remove("token.json");
 }
 
 #[cfg(target_os = "macos")]

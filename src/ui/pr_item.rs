@@ -2,8 +2,8 @@ use super::pr_status::{CiStatusIcon, PrStatusIcon};
 use super::shared::{
     ContextMenu, ContextMenuItem, Icon, IconName, Tooltip, list_text_max_width, truncate_line,
 };
-use crate::color;
-use crate::model::{CiStatus, PrStatus, PullRequest};
+use crate::models::{CiStatus, PrStatus, PullRequest};
+use crate::ui::color;
 use gpui::{
     App, ClickEvent, ElementId, InteractiveElement, IntoElement, MouseDownEvent, ParentElement,
     RenderOnce, SharedString, Styled, Window, div, prelude::*, px,
