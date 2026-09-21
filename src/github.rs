@@ -1,16 +1,14 @@
 //! Concrete implementation of the `datasource` traits for GitHub:
-//! OAuth device flow + REST search API, backed by the OS credential store.
+//! OAuth device flow + REST search API, with tokens in the credential store.
 
-use std::sync::Mutex;
+use std::path::PathBuf;
 use std::{thread, time::Duration};
 
 use serde::{Deserialize, Serialize};
 
-use crate::datasource::{AuthStore, AuthSuccess, CodeHost, DataSourceError, DataSourceResult};
-
-static TOKEN_REFRESH: Mutex<()> = Mutex::new(());
+use crate::auth::TokenStore;
+use crate::datasource::{AuthSuccess, CodeHost, DataSourceError, DataSourceResult};
 use crate::model::{ActivityItem, ActivityKind, CiStatus, DeviceCode, PrStatus, PullRequest};
-use std::path::PathBuf;
 
 const GITHUB_CLIENT_ID: &str = "Ov23li14mBVzqgdBi3HH";
 
@@ -30,37 +28,32 @@ impl GithubApi {
         }
     }
 
-    fn token(&self) -> Option<String> {
-        self.token_store.load_token()
-    }
-
     fn bearer(&self) -> DataSourceResult<String> {
-        self.token()
-            .ok_or_else(|| DataSourceError::new("not logged in"))
+        if let Some(token) = self.token_store.access_token() {
+            return Ok(token);
+        }
+        if self.try_refresh_session("") {
+            return self
+                .token_store
+                .access_token()
+                .ok_or_else(|| DataSourceError::new("not logged in"));
+        }
+        Err(DataSourceError::new("not logged in"))
     }
 
     fn save_tokens(&self, access_token: String, refresh_token: Option<String>) {
-        self.token_store.save(&StoredToken {
-            access_token,
-            refresh_token,
-        });
+        self.token_store.save_tokens(access_token, refresh_token);
     }
 
     fn try_refresh_session(&self, stale_access_token: &str) -> bool {
-        let _guard = TOKEN_REFRESH
-            .lock()
-            .unwrap_or_else(|poisoned| poisoned.into_inner());
-        let Some(stored) = self.token_store.load() else {
-            return false;
-        };
-        if stored.access_token != stale_access_token {
+        let _guard = self.token_store.lock_refresh();
+        if let Some(current) = self.token_store.access_token()
+            && !stale_access_token.is_empty()
+            && current != stale_access_token
+        {
             return true;
         }
-        let Some(refresh_token) = stored
-            .refresh_token
-            .clone()
-            .filter(|token| !token.is_empty())
-        else {
+        let Some(refresh_token) = self.token_store.refresh_token() else {
             return false;
         };
 
@@ -83,7 +76,7 @@ impl GithubApi {
             .json(&Request {
                 client_id: GITHUB_CLIENT_ID,
                 grant_type: "refresh_token",
-                refresh_token,
+                refresh_token: refresh_token.clone(),
             })
             .send()
         else {
@@ -100,7 +93,7 @@ impl GithubApi {
                 access_token,
                 resp.refresh_token
                     .filter(|token| !token.is_empty())
-                    .or(stored.refresh_token),
+                    .or(Some(refresh_token)),
             );
             return true;
         }
@@ -199,7 +192,7 @@ impl Default for GithubApi {
 
 impl CodeHost for GithubApi {
     fn has_saved_session(&self) -> bool {
-        self.token().is_some()
+        self.token_store.has_credentials()
     }
 
     fn start_login(&self) -> DataSourceResult<DeviceCode> {
@@ -993,30 +986,6 @@ impl CodeHost for GithubApi {
     }
 }
 
-#[cfg(target_os = "macos")]
-const KEYCHAIN_SERVICE: &str = "dev.haberkamp.angryhub";
-#[cfg(target_os = "macos")]
-const KEYCHAIN_USER: &str = "github-oauth";
-
-/// macOS Data Protection keychain (silent, local). Falls back to `token.json`.
-pub struct TokenStore;
-
-struct FileTokenStore;
-
-#[derive(Clone, Deserialize, Serialize)]
-struct StoredToken {
-    access_token: String,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    refresh_token: Option<String>,
-}
-
-fn token_path() -> std::path::PathBuf {
-    dirs::config_dir()
-        .unwrap_or_else(|| std::path::PathBuf::from("."))
-        .join("angry-hub")
-        .join("token.json")
-}
-
 fn prs_cache_path() -> PathBuf {
     dirs::config_dir()
         .unwrap_or_else(|| PathBuf::from("."))
@@ -1042,109 +1011,6 @@ impl PrsCache {
 
     pub fn clear() {
         let _ = std::fs::remove_file(prs_cache_path());
-    }
-}
-
-impl FileTokenStore {
-    fn load(&self) -> Option<StoredToken> {
-        let contents = std::fs::read_to_string(token_path()).ok()?;
-        serde_json::from_str(&contents).ok()
-    }
-
-    fn save(&self, stored: &StoredToken) {
-        let path = token_path();
-        let _ = std::fs::create_dir_all(path.parent().unwrap());
-        if let Ok(json) = serde_json::to_string(stored) {
-            let _ = std::fs::write(path, json);
-        }
-    }
-
-    fn clear(&self) {
-        let _ = std::fs::remove_file(token_path());
-    }
-}
-
-#[cfg(target_os = "macos")]
-fn data_protection_entry() -> Option<keyring_core::Entry> {
-    use apple_native_keyring_store::protected::Store;
-    use keyring_core::api::CredentialStoreApi;
-
-    let store = Store::new().ok()?;
-    let modifiers =
-        std::collections::HashMap::from([("access-policy", "after-first-unlock-this-device-only")]);
-    store
-        .build(KEYCHAIN_SERVICE, KEYCHAIN_USER, Some(&modifiers))
-        .ok()
-}
-
-impl TokenStore {
-    fn load_from_keychain(&self) -> Option<StoredToken> {
-        #[cfg(target_os = "macos")]
-        {
-            let json = data_protection_entry()?.get_password().ok()?;
-            serde_json::from_str(&json).ok()
-        }
-        #[cfg(not(target_os = "macos"))]
-        None
-    }
-
-    fn save_to_keychain(&self, stored: &StoredToken) -> bool {
-        #[cfg(target_os = "macos")]
-        {
-            let Some(entry) = data_protection_entry() else {
-                return false;
-            };
-            let Ok(json) = serde_json::to_string(stored) else {
-                return false;
-            };
-            entry.set_password(&json).is_ok()
-        }
-        #[cfg(not(target_os = "macos"))]
-        {
-            let _ = stored;
-            false
-        }
-    }
-
-    fn load(&self) -> Option<StoredToken> {
-        if let Some(stored) = self.load_from_keychain() {
-            return Some(stored);
-        }
-        let stored = FileTokenStore.load()?;
-        if self.save_to_keychain(&stored) {
-            FileTokenStore.clear();
-        }
-        Some(stored)
-    }
-
-    fn save(&self, stored: &StoredToken) {
-        if self.save_to_keychain(stored) {
-            FileTokenStore.clear();
-            return;
-        }
-        FileTokenStore.save(stored);
-    }
-}
-
-impl AuthStore for TokenStore {
-    fn load_token(&self) -> Option<String> {
-        self.load().map(|stored| stored.access_token)
-    }
-
-    fn save_token(&self, token: &str) {
-        let refresh_token = self.load().and_then(|stored| stored.refresh_token);
-        self.save(&StoredToken {
-            access_token: token.to_string(),
-            refresh_token,
-        });
-    }
-
-    fn clear(&self) {
-        #[cfg(target_os = "macos")]
-        if let Some(entry) = data_protection_entry() {
-            let _ = entry.delete_credential();
-        }
-        FileTokenStore.clear();
     }
 }
 

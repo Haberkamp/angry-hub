@@ -12,6 +12,7 @@ use gpui::{
 use rooter::Router;
 
 mod app_menus;
+mod auth;
 mod color;
 mod datasource;
 mod github;

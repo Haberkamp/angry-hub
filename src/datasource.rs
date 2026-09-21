@@ -1,9 +1,11 @@
-use std::sync::Arc;
+use std::sync::{Arc, OnceLock};
 
 use crate::model::{ActivityItem, DeviceCode, PullRequest};
 
 pub fn code_host() -> Arc<dyn CodeHost> {
-    Arc::new(crate::github::GithubApi::new())
+    static HOST: OnceLock<Arc<dyn CodeHost>> = OnceLock::new();
+    HOST.get_or_init(|| Arc::new(crate::github::GithubApi::new()))
+        .clone()
 }
 
 pub type DataSourceResult<T> = Result<T, DataSourceError>;
@@ -67,11 +69,4 @@ pub trait CodeHost: Send + Sync {
     fn my_pr_activity(&self) -> DataSourceResult<Vec<ActivityItem>>;
 
     fn logout(&self);
-}
-
-pub trait AuthStore: Send + Sync {
-    fn load_token(&self) -> Option<String>;
-    #[allow(dead_code)]
-    fn save_token(&self, token: &str);
-    fn clear(&self);
 }
