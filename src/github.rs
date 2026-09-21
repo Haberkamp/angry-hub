@@ -19,14 +19,14 @@ const ACCESS_TOKEN_URL: &str = "https://github.com/login/oauth/access_token";
 
 pub struct GithubApi {
     client: reqwest::blocking::Client,
-    token_store: KeyringTokenStore,
+    token_store: TokenStore,
 }
 
 impl GithubApi {
     pub fn new() -> Self {
         Self {
             client: reqwest::blocking::Client::new(),
-            token_store: KeyringTokenStore,
+            token_store: TokenStore,
         }
     }
 
@@ -993,13 +993,13 @@ impl CodeHost for GithubApi {
     }
 }
 
-/// Login-keychain item. Not iCloud: `keyring` uses Apple's file keychain, not
-/// the Protected Data store (`cloud-sync`).
-const KEYRING_SERVICE: &str = "dev.haberkamp.angryhub";
-const KEYRING_USER: &str = "github-oauth";
+#[cfg(target_os = "macos")]
+const KEYCHAIN_SERVICE: &str = "dev.haberkamp.angryhub";
+#[cfg(target_os = "macos")]
+const KEYCHAIN_USER: &str = "github-oauth";
 
-/// OS credential store, with a one-time migrate-and-delete of `token.json`.
-pub struct KeyringTokenStore;
+/// macOS Data Protection keychain (silent, local). Falls back to `token.json`.
+pub struct TokenStore;
 
 struct FileTokenStore;
 
@@ -1045,10 +1045,6 @@ impl PrsCache {
     }
 }
 
-fn keyring_entry() -> Option<keyring::Entry> {
-    keyring::Entry::new(KEYRING_SERVICE, KEYRING_USER).ok()
-}
-
 impl FileTokenStore {
     fn load(&self) -> Option<StoredToken> {
         let contents = std::fs::read_to_string(token_path()).ok()?;
@@ -1068,35 +1064,61 @@ impl FileTokenStore {
     }
 }
 
-impl KeyringTokenStore {
-    fn load_from_keyring(&self) -> Option<StoredToken> {
-        let json = keyring_entry()?.get_password().ok()?;
-        serde_json::from_str(&json).ok()
+#[cfg(target_os = "macos")]
+fn data_protection_entry() -> Option<keyring_core::Entry> {
+    use apple_native_keyring_store::protected::Store;
+    use keyring_core::api::CredentialStoreApi;
+
+    let store = Store::new().ok()?;
+    let modifiers =
+        std::collections::HashMap::from([("access-policy", "after-first-unlock-this-device-only")]);
+    store
+        .build(KEYCHAIN_SERVICE, KEYCHAIN_USER, Some(&modifiers))
+        .ok()
+}
+
+impl TokenStore {
+    fn load_from_keychain(&self) -> Option<StoredToken> {
+        #[cfg(target_os = "macos")]
+        {
+            let json = data_protection_entry()?.get_password().ok()?;
+            serde_json::from_str(&json).ok()
+        }
+        #[cfg(not(target_os = "macos"))]
+        None
     }
 
-    fn save_to_keyring(&self, stored: &StoredToken) -> bool {
-        let Some(entry) = keyring_entry() else {
-            return false;
-        };
-        let Ok(json) = serde_json::to_string(stored) else {
-            return false;
-        };
-        entry.set_password(&json).is_ok()
+    fn save_to_keychain(&self, stored: &StoredToken) -> bool {
+        #[cfg(target_os = "macos")]
+        {
+            let Some(entry) = data_protection_entry() else {
+                return false;
+            };
+            let Ok(json) = serde_json::to_string(stored) else {
+                return false;
+            };
+            entry.set_password(&json).is_ok()
+        }
+        #[cfg(not(target_os = "macos"))]
+        {
+            let _ = stored;
+            false
+        }
     }
 
     fn load(&self) -> Option<StoredToken> {
-        if let Some(stored) = self.load_from_keyring() {
+        if let Some(stored) = self.load_from_keychain() {
             return Some(stored);
         }
         let stored = FileTokenStore.load()?;
-        if self.save_to_keyring(&stored) {
+        if self.save_to_keychain(&stored) {
             FileTokenStore.clear();
         }
         Some(stored)
     }
 
     fn save(&self, stored: &StoredToken) {
-        if self.save_to_keyring(stored) {
+        if self.save_to_keychain(stored) {
             FileTokenStore.clear();
             return;
         }
@@ -1104,7 +1126,7 @@ impl KeyringTokenStore {
     }
 }
 
-impl AuthStore for KeyringTokenStore {
+impl AuthStore for TokenStore {
     fn load_token(&self) -> Option<String> {
         self.load().map(|stored| stored.access_token)
     }
@@ -1118,7 +1140,8 @@ impl AuthStore for KeyringTokenStore {
     }
 
     fn clear(&self) {
-        if let Some(entry) = keyring_entry() {
+        #[cfg(target_os = "macos")]
+        if let Some(entry) = data_protection_entry() {
             let _ = entry.delete_credential();
         }
         FileTokenStore.clear();
