@@ -1,5 +1,5 @@
 //! Concrete implementation of the `datasource` traits for GitHub:
-//! OAuth device flow + REST search API, backed by a filesystem token store.
+//! OAuth device flow + REST search API, backed by the OS credential store.
 
 use std::sync::Mutex;
 use std::{thread, time::Duration};
@@ -19,14 +19,14 @@ const ACCESS_TOKEN_URL: &str = "https://github.com/login/oauth/access_token";
 
 pub struct GithubApi {
     client: reqwest::blocking::Client,
-    token_store: FileTokenStore,
+    token_store: KeyringTokenStore,
 }
 
 impl GithubApi {
     pub fn new() -> Self {
         Self {
             client: reqwest::blocking::Client::new(),
-            token_store: FileTokenStore,
+            token_store: KeyringTokenStore,
         }
     }
 
@@ -993,8 +993,15 @@ impl CodeHost for GithubApi {
     }
 }
 
-/// Stores the OAuth token as JSON in the user's config directory.
-pub struct FileTokenStore;
+/// Login-keychain item. Not iCloud: `keyring` uses Apple's file keychain, not
+/// the Protected Data store (`cloud-sync`).
+const KEYRING_SERVICE: &str = "dev.haberkamp.angryhub";
+const KEYRING_USER: &str = "github-oauth";
+
+/// OS credential store, with a one-time migrate-and-delete of `token.json`.
+pub struct KeyringTokenStore;
+
+struct FileTokenStore;
 
 #[derive(Clone, Deserialize, Serialize)]
 struct StoredToken {
@@ -1038,6 +1045,10 @@ impl PrsCache {
     }
 }
 
+fn keyring_entry() -> Option<keyring::Entry> {
+    keyring::Entry::new(KEYRING_SERVICE, KEYRING_USER).ok()
+}
+
 impl FileTokenStore {
     fn load(&self) -> Option<StoredToken> {
         let contents = std::fs::read_to_string(token_path()).ok()?;
@@ -1051,9 +1062,49 @@ impl FileTokenStore {
             let _ = std::fs::write(path, json);
         }
     }
+
+    fn clear(&self) {
+        let _ = std::fs::remove_file(token_path());
+    }
 }
 
-impl AuthStore for FileTokenStore {
+impl KeyringTokenStore {
+    fn load_from_keyring(&self) -> Option<StoredToken> {
+        let json = keyring_entry()?.get_password().ok()?;
+        serde_json::from_str(&json).ok()
+    }
+
+    fn save_to_keyring(&self, stored: &StoredToken) -> bool {
+        let Some(entry) = keyring_entry() else {
+            return false;
+        };
+        let Ok(json) = serde_json::to_string(stored) else {
+            return false;
+        };
+        entry.set_password(&json).is_ok()
+    }
+
+    fn load(&self) -> Option<StoredToken> {
+        if let Some(stored) = self.load_from_keyring() {
+            return Some(stored);
+        }
+        let stored = FileTokenStore.load()?;
+        if self.save_to_keyring(&stored) {
+            FileTokenStore.clear();
+        }
+        Some(stored)
+    }
+
+    fn save(&self, stored: &StoredToken) {
+        if self.save_to_keyring(stored) {
+            FileTokenStore.clear();
+            return;
+        }
+        FileTokenStore.save(stored);
+    }
+}
+
+impl AuthStore for KeyringTokenStore {
     fn load_token(&self) -> Option<String> {
         self.load().map(|stored| stored.access_token)
     }
@@ -1067,7 +1118,10 @@ impl AuthStore for FileTokenStore {
     }
 
     fn clear(&self) {
-        let _ = std::fs::remove_file(token_path());
+        if let Some(entry) = keyring_entry() {
+            let _ = entry.delete_credential();
+        }
+        FileTokenStore.clear();
     }
 }
 
