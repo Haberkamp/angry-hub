@@ -51,6 +51,10 @@ impl CodeHost for GithubHost {
         self.api.close_pull_request(id)
     }
 
+    fn set_pull_request_draft(&self, id: &str, draft: bool) -> DataSourceResult<()> {
+        self.api.set_pull_request_draft(id, draft)
+    }
+
     fn oauth_app_restricted_from_repo(&self, name_with_owner: &str) -> DataSourceResult<bool> {
         self.api.oauth_app_restricted_from_repo(name_with_owner)
     }

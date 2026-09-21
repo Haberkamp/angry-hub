@@ -13,6 +13,7 @@ type ToggleMenuHandler = Box<dyn Fn(&ClickEvent, &mut Window, &mut App) + 'stati
 type DismissMenuHandler = Box<dyn Fn(&MouseDownEvent, &mut Window, &mut App) + 'static>;
 type ClosePrHandler = Box<dyn Fn(&mut Window, &mut App) + 'static>;
 type CopyBranchHandler = Box<dyn Fn(&mut Window, &mut App) + 'static>;
+type ToggleDraftHandler = Box<dyn Fn(&mut Window, &mut App) + 'static>;
 
 #[derive(IntoElement)]
 pub struct PrItem {
@@ -34,10 +35,12 @@ pub struct PrItem {
     ci_tooltip_id: SharedString,
     menu_open: bool,
     closing: bool,
+    toggling_draft: bool,
     on_toggle_menu: Option<ToggleMenuHandler>,
     on_dismiss_menu: Option<DismissMenuHandler>,
     on_close_pr: Option<ClosePrHandler>,
     on_copy_branch: Option<CopyBranchHandler>,
+    on_toggle_draft: Option<ToggleDraftHandler>,
 }
 
 fn truncated_title(title: SharedString, has_conflicts: bool, window: &mut Window) -> SharedString {
@@ -88,10 +91,12 @@ impl PrItem {
             ci_tooltip_id: SharedString::from(format!("pr-ci-{ix}")),
             menu_open: false,
             closing: false,
+            toggling_draft: false,
             on_toggle_menu: None,
             on_dismiss_menu: None,
             on_close_pr: None,
             on_copy_branch: None,
+            on_toggle_draft: None,
         }
     }
 
@@ -102,6 +107,11 @@ impl PrItem {
 
     pub fn closing(mut self, closing: bool) -> Self {
         self.closing = closing;
+        self
+    }
+
+    pub fn toggling_draft(mut self, toggling: bool) -> Self {
+        self.toggling_draft = toggling;
         self
     }
 
@@ -130,6 +140,11 @@ impl PrItem {
         self.on_copy_branch = Some(Box::new(listener));
         self
     }
+
+    pub fn on_toggle_draft(mut self, listener: impl Fn(&mut Window, &mut App) + 'static) -> Self {
+        self.on_toggle_draft = Some(Box::new(listener));
+        self
+    }
 }
 
 impl RenderOnce for PrItem {
@@ -150,11 +165,17 @@ impl RenderOnce for PrItem {
             None
         };
 
+        let draft_label = if self.status == PrStatus::Draft {
+            "Mark as ready for review"
+        } else {
+            "Convert to draft"
+        };
         let mut menu = ContextMenu::new(menu_id)
             .open(self.menu_open)
             .hover_group(self.group.clone())
             .items(vec![
                 ContextMenuItem::new("copy-branch", "Copy branch name"),
+                ContextMenuItem::new("toggle-draft", draft_label).loading(self.toggling_draft),
                 ContextMenuItem::new("close", "Close pull request").loading(self.closing),
             ]);
         if let Some(on_toggle_menu) = self.on_toggle_menu {
@@ -163,13 +184,22 @@ impl RenderOnce for PrItem {
         if let Some(on_dismiss_menu) = self.on_dismiss_menu {
             menu = menu.on_dismiss(on_dismiss_menu);
         }
-        if self.on_close_pr.is_some() || self.on_copy_branch.is_some() {
+        if self.on_close_pr.is_some()
+            || self.on_copy_branch.is_some()
+            || self.on_toggle_draft.is_some()
+        {
             let on_close_pr = self.on_close_pr;
             let on_copy_branch = self.on_copy_branch;
+            let on_toggle_draft = self.on_toggle_draft;
             menu = menu.on_select(move |item_id, window, cx| match item_id {
                 "copy-branch" => {
                     if let Some(on_copy_branch) = &on_copy_branch {
                         on_copy_branch(window, cx);
+                    }
+                }
+                "toggle-draft" => {
+                    if let Some(on_toggle_draft) = &on_toggle_draft {
+                        on_toggle_draft(window, cx);
                     }
                 }
                 "close" => {

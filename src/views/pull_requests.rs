@@ -28,6 +28,7 @@ pub struct PullRequests {
     visibility_menu_open: bool,
     pr_menu_open: Option<String>,
     closing_pr: Option<String>,
+    toggling_draft: Option<String>,
     refreshing: bool,
     loading: bool,
     fetch_in_flight: bool,
@@ -65,6 +66,7 @@ impl PullRequests {
             visibility_menu_open: false,
             pr_menu_open: None,
             closing_pr: None,
+            toggling_draft: None,
             refreshing: false,
             loading: false,
             fetch_in_flight: false,
@@ -179,11 +181,22 @@ impl PullRequests {
         cx.notify();
     }
 
-    fn prompt_close_on_github(&mut self, url: String, window: &mut Window, cx: &mut Context<Self>) {
+    fn pr_action_in_flight(&self) -> bool {
+        self.closing_pr.is_some() || self.toggling_draft.is_some()
+    }
+
+    fn prompt_action_on_github(
+        &mut self,
+        url: String,
+        message: &'static str,
+        detail: &'static str,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
         let answer = window.prompt(
             PromptLevel::Warning,
-            "This organization restricts OAuth apps, so Angry Hub can't close the pull request.",
-            Some("Open it on GitHub and close it in the browser?"),
+            message,
+            Some(detail),
             &["Open on GitHub", "Cancel"],
             cx,
         );
@@ -195,10 +208,46 @@ impl PullRequests {
         .detach();
     }
 
-    fn finish_close_pr(&mut self, cx: &mut Context<Self>) {
+    fn prompt_close_on_github(&mut self, url: String, window: &mut Window, cx: &mut Context<Self>) {
+        self.prompt_action_on_github(
+            url,
+            "This organization restricts OAuth apps, so Angry Hub can't close the pull request.",
+            "Open it on GitHub and close it in the browser?",
+            window,
+            cx,
+        );
+    }
+
+    fn prompt_draft_on_github(
+        &mut self,
+        url: String,
+        draft: bool,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        let (message, detail) = if draft {
+            (
+                "This organization restricts OAuth apps, so Angry Hub can't convert the pull request to a draft.",
+                "Open it on GitHub and convert it to a draft in the browser?",
+            )
+        } else {
+            (
+                "This organization restricts OAuth apps, so Angry Hub can't mark the pull request as ready for review.",
+                "Open it on GitHub and mark it ready for review in the browser?",
+            )
+        };
+        self.prompt_action_on_github(url, message, detail, window, cx);
+    }
+
+    fn finish_pr_action(&mut self, cx: &mut Context<Self>) {
         self.closing_pr = None;
+        self.toggling_draft = None;
         self.pr_menu_open = None;
         cx.notify();
+    }
+
+    fn finish_close_pr(&mut self, cx: &mut Context<Self>) {
+        self.finish_pr_action(cx);
     }
 
     fn close_pr(
@@ -210,7 +259,7 @@ impl PullRequests {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        if self.closing_pr.is_some() {
+        if self.pr_action_in_flight() {
             return;
         }
         self.pr_menu_open = Some(menu_key.clone());
@@ -278,6 +327,105 @@ impl PullRequests {
                     eprintln!("failed to close pull request: {e}");
                     this.update_in(cx, |this, window, cx| {
                         this.finish_close_pr(cx);
+                        this.fetch_prs(window, cx);
+                    })
+                    .ok();
+                }
+            }
+        })
+        .detach();
+    }
+
+    fn set_pr_draft(
+        &mut self,
+        id: String,
+        url: String,
+        repo: String,
+        menu_key: String,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        let draft = match &self.prs {
+            PrsState::Loaded(prs) => prs
+                .iter()
+                .find(|pr| pr.id == id)
+                .is_none_or(|pr| pr.status != models::PrStatus::Draft),
+            _ => true,
+        };
+        if self.pr_action_in_flight() {
+            return;
+        }
+        self.pr_menu_open = Some(menu_key.clone());
+        self.toggling_draft = Some(menu_key);
+        cx.notify();
+        if id.is_empty() {
+            self.finish_pr_action(cx);
+            self.prompt_draft_on_github(url, draft, window, cx);
+            return;
+        }
+
+        let host = code_host();
+        cx.spawn_in(window, async move |this, cx| {
+            let probe_host = host.clone();
+            let repo_for_probe = repo.clone();
+            let restricted = cx
+                .background_executor()
+                .spawn(async move {
+                    probe_host
+                        .oauth_app_restricted_from_repo(&repo_for_probe)
+                        .unwrap_or(false)
+                })
+                .await;
+
+            if restricted {
+                this.update_in(cx, |this, window, cx| {
+                    this.finish_pr_action(cx);
+                    this.prompt_draft_on_github(url, draft, window, cx);
+                })
+                .ok();
+                return;
+            }
+
+            let draft_host = host.clone();
+            let draft_id = id.clone();
+            let result = cx
+                .background_executor()
+                .spawn(async move { draft_host.set_pull_request_draft(&draft_id, draft) })
+                .await;
+            match result {
+                Ok(()) => {
+                    this.update(cx, |this, cx| {
+                        if let PrsState::Loaded(prs) = &mut this.prs
+                            && let Some(pr) = prs.iter_mut().find(|pr| pr.id == id)
+                        {
+                            pr.status = if draft {
+                                models::PrStatus::Draft
+                            } else {
+                                models::PrStatus::Open
+                            };
+                        }
+                        this.finish_pr_action(cx);
+                    })
+                    .ok();
+                }
+                Err(e) if e.is_oauth_app_restricted() => {
+                    this.update_in(cx, |this, window, cx| {
+                        this.finish_pr_action(cx);
+                        this.prompt_draft_on_github(url, draft, window, cx);
+                    })
+                    .ok();
+                }
+                Err(e) if e.is_session_ended() => {
+                    this.update_in(cx, |this, window, cx| {
+                        this.finish_pr_action(cx);
+                        session::force_logout(window, cx);
+                    })
+                    .ok();
+                }
+                Err(e) => {
+                    eprintln!("failed to set pull request draft: {e}");
+                    this.update_in(cx, |this, window, cx| {
+                        this.finish_pr_action(cx);
                         this.fetch_prs(window, cx);
                     })
                     .ok();
@@ -436,10 +584,11 @@ impl Render for PullRequests {
                             PrItem::new(ix, pr)
                                 .menu_open(self.pr_menu_open.as_deref() == Some(&menu_key))
                                 .closing(self.closing_pr.as_deref() == Some(&menu_key))
+                                .toggling_draft(self.toggling_draft.as_deref() == Some(&menu_key))
                                 .on_toggle_menu(cx.listener({
                                     let menu_key = menu_key.clone();
                                     move |this, _, _, cx| {
-                                        if this.closing_pr.is_some() {
+                                        if this.pr_action_in_flight() {
                                             return;
                                         }
                                         if this.pr_menu_open.as_deref() == Some(&menu_key) {
@@ -452,7 +601,7 @@ impl Render for PullRequests {
                                     }
                                 }))
                                 .on_dismiss_menu(cx.listener(|this, _, _, cx| {
-                                    if this.closing_pr.is_some() {
+                                    if this.pr_action_in_flight() {
                                         return;
                                     }
                                     this.pr_menu_open = None;
@@ -486,6 +635,25 @@ impl Render for PullRequests {
                                     move |window, app| {
                                         entity.update(app, |this, cx| {
                                             this.close_pr(
+                                                close_id.clone(),
+                                                url.clone(),
+                                                repo.clone(),
+                                                menu_key.clone(),
+                                                window,
+                                                cx,
+                                            );
+                                        });
+                                    }
+                                })
+                                .on_toggle_draft({
+                                    let close_id = close_id.clone();
+                                    let url = pr.url.clone();
+                                    let repo = pr.repo.clone();
+                                    let menu_key = menu_key.clone();
+                                    let entity = cx.entity();
+                                    move |window, app| {
+                                        entity.update(app, |this, cx| {
+                                            this.set_pr_draft(
                                                 close_id.clone(),
                                                 url.clone(),
                                                 repo.clone(),

@@ -70,6 +70,8 @@ pub trait CodeHost: Send + Sync {
 
     fn close_pull_request(&self, id: &str) -> DataSourceResult<()>;
 
+    fn set_pull_request_draft(&self, id: &str, draft: bool) -> DataSourceResult<()>;
+
     fn oauth_app_restricted_from_repo(&self, name_with_owner: &str) -> DataSourceResult<bool>;
 
     fn activity_snapshot(&self) -> Option<Vec<ActivityItem>> {

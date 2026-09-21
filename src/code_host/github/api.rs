@@ -909,6 +909,24 @@ impl GithubApi {
         Ok(items)
     }
 
+    pub(super) fn set_pull_request_draft(&self, id: &str, draft: bool) -> DataSourceResult<()> {
+        const TO_DRAFT: &str = r#"
+            mutation($id: ID!) {
+              convertPullRequestToDraft(input: { pullRequestId: $id }) {
+                pullRequest { id isDraft }
+              }
+            }
+        "#;
+        const READY: &str = r#"
+            mutation($id: ID!) {
+              markPullRequestReadyForReview(input: { pullRequestId: $id }) {
+                pullRequest { id isDraft }
+              }
+            }
+        "#;
+        self.mutate_pull_request(if draft { TO_DRAFT } else { READY }, id)
+    }
+
     pub(super) fn close_pull_request(&self, id: &str) -> DataSourceResult<()> {
         const MUTATION: &str = r#"
             mutation($id: ID!) {
@@ -917,7 +935,10 @@ impl GithubApi {
               }
             }
         "#;
+        self.mutate_pull_request(MUTATION, id)
+    }
 
+    fn mutate_pull_request(&self, mutation: &'static str, id: &str) -> DataSourceResult<()> {
         #[derive(Serialize)]
         struct Request<'a> {
             query: &'static str,
@@ -939,7 +960,7 @@ impl GithubApi {
         }
 
         let body = self.graphql(&Request {
-            query: MUTATION,
+            query: mutation,
             variables: Variables { id },
         })?;
         let resp: Response = serde_json::from_str(&body)
