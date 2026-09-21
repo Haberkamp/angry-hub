@@ -41,8 +41,14 @@ impl GithubApi {
         Err(DataSourceError::new("not logged in"))
     }
 
-    fn save_tokens(&self, access_token: String, refresh_token: Option<String>) {
-        self.token_store.save_tokens(access_token, refresh_token);
+    fn save_tokens(
+        &self,
+        access_token: String,
+        refresh_token: Option<String>,
+    ) -> DataSourceResult<()> {
+        self.token_store
+            .save_tokens(access_token, refresh_token)
+            .map_err(DataSourceError::new)
     }
 
     fn try_refresh_session(&self, stale_access_token: &str) -> bool {
@@ -89,13 +95,14 @@ impl GithubApi {
             return false;
         };
         if let Some(access_token) = resp.access_token.filter(|token| !token.is_empty()) {
-            self.save_tokens(
-                access_token,
-                resp.refresh_token
-                    .filter(|token| !token.is_empty())
-                    .or(Some(refresh_token)),
-            );
-            return true;
+            return self
+                .save_tokens(
+                    access_token,
+                    resp.refresh_token
+                        .filter(|token| !token.is_empty())
+                        .or(Some(refresh_token)),
+                )
+                .is_ok();
         }
         false
     }
@@ -282,7 +289,7 @@ impl CodeHost for GithubApi {
                 .map_err(|e| DataSourceError::new(format!("invalid response: {e}")))?;
 
             if let Some(token) = resp.access_token {
-                self.save_tokens(token, resp.refresh_token);
+                self.save_tokens(token, resp.refresh_token)?;
                 return Ok(AuthSuccess);
             }
 

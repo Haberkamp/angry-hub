@@ -37,5 +37,5 @@ self_update = { version = "1.3", default-features = false, features = [
 ] }
 
 [target.'cfg(target_os = "macos")'.dependencies]
-apple-native-keyring-store = { version = "1", default-features = false, features = ["protected"] }
+apple-native-keyring-store = { version = "1", default-features = false, features = ["keychain"] }
 keyring-core = "1"

@@ -1,10 +1,10 @@
 //! Credential store: access token in process memory, refresh token in the
-//! macOS Data Protection keychain.
+//! macOS **login** keychain (generic password).
 //!
-//! Accessibility is `kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly` via the
-//! keyring `access-policy` modifier. That gates on device unlock after reboot,
-//! not on Touch ID or the login password. Do not set `RequireUserPresence` or
-//! other `kSecAccessControl*` user-presence flags — those prompt on every read.
+//! The Data Protection (“protected”) keychain is for sandboxed apps. This
+//! product is a Developer ID `.app` without App Sandbox, so writes there are
+//! silently dropped and a restart looks logged out. The login keychain is
+//! available to all apps and shows up in Keychain Access.
 
 use std::path::PathBuf;
 use std::sync::Mutex;
@@ -45,13 +45,18 @@ impl TokenStore {
     /// Keep the access token in memory. Persist a refresh token when GitHub
     /// issues one; otherwise persist the access token so the next launch can
     /// restore a session.
-    pub fn save_tokens(&self, access_token: String, refresh_token: Option<String>) {
+    pub fn save_tokens(
+        &self,
+        access_token: String,
+        refresh_token: Option<String>,
+    ) -> Result<(), String> {
         set_access_token(Some(access_token.clone()));
         if let Some(refresh_token) = refresh_token.filter(|token| !token.is_empty()) {
-            persist(Persisted::refresh(refresh_token));
+            persist(Persisted::refresh(refresh_token))?;
         } else if self.refresh_token().is_none() {
-            persist(Persisted::access_only(access_token));
+            persist(Persisted::access_only(access_token))?;
         }
+        Ok(())
     }
 
     pub fn clear(&self) {
@@ -109,16 +114,14 @@ impl Persisted {
 }
 
 #[cfg(target_os = "macos")]
-fn data_protection_entry() -> Option<keyring_core::Entry> {
-    use apple_native_keyring_store::protected::Store;
+fn login_keychain_entry() -> Result<keyring_core::Entry, String> {
+    use apple_native_keyring_store::keychain::Store;
     use keyring_core::api::CredentialStoreApi;
 
-    let store = Store::new().ok()?;
-    let modifiers =
-        std::collections::HashMap::from([("access-policy", "after-first-unlock-this-device-only")]);
+    let store = Store::new().map_err(|e| format!("keychain unavailable: {e}"))?;
     store
-        .build(KEYCHAIN_SERVICE, KEYCHAIN_ACCOUNT, Some(&modifiers))
-        .ok()
+        .build(KEYCHAIN_SERVICE, KEYCHAIN_ACCOUNT, None)
+        .map_err(|e| format!("keychain entry failed: {e}"))
 }
 
 static MEMORY: Mutex<Option<Persisted>> = Mutex::new(None);
@@ -143,10 +146,11 @@ fn persisted() -> Option<Persisted> {
     memory()
 }
 
-fn persist(stored: Persisted) {
-    set_memory(Some(stored.clone()));
-    keychain_save(&stored);
+fn persist(stored: Persisted) -> Result<(), String> {
+    keychain_save(&stored)?;
+    set_memory(Some(stored));
     delete_legacy_token_file();
+    Ok(())
 }
 
 fn persist_clear() {
@@ -165,7 +169,7 @@ fn delete_legacy_token_file() {
 
 #[cfg(target_os = "macos")]
 fn keychain_load() -> Option<Persisted> {
-    let secret = data_protection_entry()?.get_password().ok()?;
+    let secret = login_keychain_entry().ok()?.get_password().ok()?;
     if let Ok(stored) = serde_json::from_str::<Persisted>(&secret)
         && (stored.refresh_token.as_ref().is_some_and(|t| !t.is_empty())
             || stored.access_token.as_ref().is_some_and(|t| !t.is_empty()))
@@ -188,22 +192,27 @@ fn keychain_load() -> Option<Persisted> {
 }
 
 #[cfg(target_os = "macos")]
-fn keychain_save(stored: &Persisted) {
-    let Some(entry) = data_protection_entry() else {
-        return;
-    };
-    let Ok(json) = serde_json::to_string(stored) else {
-        return;
-    };
-    let _ = entry.set_password(&json);
+fn keychain_save(stored: &Persisted) -> Result<(), String> {
+    let entry = login_keychain_entry()?;
+    let json =
+        serde_json::to_string(stored).map_err(|e| format!("could not encode credentials: {e}"))?;
+    entry
+        .set_password(&json)
+        .map_err(|e| format!("could not save credentials to Keychain: {e}"))?;
+    if entry.get_password().ok().as_deref() != Some(json.as_str()) {
+        return Err("Keychain write did not stick".into());
+    }
+    Ok(())
 }
 
 #[cfg(not(target_os = "macos"))]
-fn keychain_save(_stored: &Persisted) {}
+fn keychain_save(_stored: &Persisted) -> Result<(), String> {
+    Ok(())
+}
 
 #[cfg(target_os = "macos")]
 fn keychain_clear() {
-    if let Some(entry) = data_protection_entry() {
+    if let Ok(entry) = login_keychain_entry() {
         let _ = entry.delete_credential();
     }
 }
