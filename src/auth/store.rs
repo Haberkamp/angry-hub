@@ -4,7 +4,9 @@
 //! The Data Protection (“protected”) keychain is for sandboxed apps. This
 //! product is a Developer ID `.app` without App Sandbox, so writes there are
 //! silently dropped and a restart looks logged out. The login keychain is
-//! available to all apps and shows up in Keychain Access.
+//! available to all apps and shows up in Keychain Access. Debug builds use a
+//! separate service name so `cargo run` does not share tokens with the
+//! installed app.
 
 use std::sync::Mutex;
 
@@ -14,7 +16,9 @@ use serde::{Deserialize, Serialize};
 static ACCESS_TOKEN: Mutex<Option<String>> = Mutex::new(None);
 static REFRESH_LOCK: Mutex<()> = Mutex::new(());
 
-#[cfg(target_os = "macos")]
+#[cfg(all(target_os = "macos", debug_assertions))]
+const KEYCHAIN_SERVICE: &str = "dev.haberkamp.angryhub.dev";
+#[cfg(all(target_os = "macos", not(debug_assertions)))]
 const KEYCHAIN_SERVICE: &str = "dev.haberkamp.angryhub";
 #[cfg(target_os = "macos")]
 const KEYCHAIN_ACCOUNT: &str = "github-oauth";
