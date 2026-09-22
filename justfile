@@ -16,14 +16,9 @@ entitlements := "assets/macos/entitlements.plist"
 setup:
     rustup component add rustfmt clippy
 
-# Run the app with auto-update disabled.
+# Run the app.
 run *args:
-    ANGRY_HUB_DISABLE_AUTO_UPDATE=1 cargo run {{args}}
-
-# Build the .app and embed the Icon Composer Tahoe icon (Assets.car).
-bundle:
-    cargo bundle --release --format osx
-    bash scripts/embed-app-icon.sh
+    cargo run {{args}}
 
 # Format Rust sources.
 fmt:
@@ -36,6 +31,11 @@ lint:
 # Run tests with the same flags as CI.
 test:
     cargo test --locked --all-targets --all-features
+
+# Build the .app and embed the Icon Composer Tahoe icon (Assets.car).
+bundle:
+    cargo bundle --release --format osx
+    bash scripts/embed-app-icon.sh
 
 # Save App Store Connect credentials for notarization (interactive).
 setup-notary:
