@@ -1,5 +1,7 @@
 use gpui::prelude::*;
-use gpui::{Context, IntoElement, Render, Window, WindowOptions, div, px, rgb};
+use gpui::{
+    Bounds, Context, IntoElement, Render, Window, WindowBounds, WindowOptions, div, px, rgb, size,
+};
 use gpui_base::{Button, StyledExt as _};
 
 struct Counter {
@@ -43,10 +45,18 @@ fn main() {
         gpui_base::init(cx);
 
         cx.spawn(async move |cx| {
-            cx.open_window(WindowOptions::default(), |_window, cx| {
-                cx.new(|_| Counter { count: 0 })
-            })
-            .expect("Failed to open window");
+            let options = cx.update(|cx| WindowOptions {
+                window_bounds: Some(WindowBounds::Windowed(Bounds::centered(
+                    None,
+                    size(px(800.0), px(600.0)),
+                    cx,
+                ))),
+                window_min_size: Some(size(px(480.0), px(600.0))),
+                ..Default::default()
+            });
+
+            cx.open_window(options, |_window, cx| cx.new(|_| Counter { count: 0 }))
+                .expect("Failed to open window");
         })
         .detach();
     });
