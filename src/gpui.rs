@@ -5,6 +5,8 @@ use gpui::{
 };
 use gpui_base::{Button, StyledExt as _};
 
+mod color;
+
 struct Root {
     count: i32,
 }
