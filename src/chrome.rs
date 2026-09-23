@@ -75,8 +75,12 @@ impl Render for Chrome {
     fn render(&mut self, _: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         div()
             .id("drag-area")
-            .w_full()
+            .absolute()
+            .top_0()
+            .left_0()
+            .right_0()
             .h(px(28.0))
+            .bg(gpui::transparent_black())
             .on_mouse_down(
                 MouseButton::Left,
                 cx.listener(|this, _, _, _| {

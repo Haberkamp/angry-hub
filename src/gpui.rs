@@ -89,8 +89,8 @@ impl Render for Root {
             .v_flex()
             .size_full()
             .text_color(rgb(0xffffff))
-            .child(self.chrome.clone())
             .child(page)
+            .child(self.chrome.clone())
             .children(logout)
     }
 }

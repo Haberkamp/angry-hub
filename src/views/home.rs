@@ -1,11 +1,13 @@
+use std::rc::Rc;
 use std::time::Duration;
 
 use gpui::prelude::*;
 use gpui::{
     App, Context, Entity, EventEmitter, IntoElement, MouseButton, PromptButton, PromptLevel,
-    Render, Transformation, Window, div, point, px, rgb, svg,
+    Render, Transformation, Window, div, point, px, rgb, size, svg,
 };
 use gpui_base::StyledExt as _;
+use gpui_base::{VirtualListScrollHandle, v_virtual_list};
 
 use crate::auth::Auth;
 use crate::color;
@@ -19,6 +21,7 @@ use crate::pulls::{self, Event, PullRequest, SyncState, SYNC_ROW};
 use crate::sync;
 
 const INSET: f32 = 12.;
+const ROW_HEIGHT: f32 = 64.;
 
 pub struct LoggedOut;
 
@@ -33,6 +36,8 @@ struct SyncJob {
 pub struct Home {
     store: homestead::Store<Event>,
     pulls: homestead::Live<homestead::Select<PullRequest>>,
+    rows: Vec<PullRequest>,
+    scroll: VirtualListScrollHandle,
 }
 
 impl Home {
@@ -41,7 +46,12 @@ impl Home {
         let pulls = store
             .watch(PullRequest::query().order_by_desc("updated_at"))
             .expect("watch pull requests");
-        let home = Self { store, pulls };
+        let home = Self {
+            store,
+            pulls,
+            rows: Vec::new(),
+            scroll: VirtualListScrollHandle::new(),
+        };
         home.start_sync(cx);
         home
     }
@@ -311,34 +321,48 @@ fn pull_row(pull: PullRequest, cx: &App) -> impl IntoElement {
 
 impl Render for Home {
     fn render(&mut self, _: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
-        let pulls = self.pulls.rows();
-        let empty = pulls.is_empty();
+        self.rows = grouped(self.pulls.rows());
+        let empty = self.rows.is_empty();
+        let count = self.rows.len();
+        let sizes = Rc::new(vec![size(px(560.), px(ROW_HEIGHT)); count]);
         div()
-            .id("pulls")
             .flex_1()
             .size_full()
-            .overflow_y_scroll()
-            .pt(px(56.))
-            .px(px(24.))
-            .pb(px(24.))
-            .child(
+            .child(if empty {
                 div()
-                    .w_full()
-                    .max_w(px(560.))
-                    .mx_auto()
-                    .v_flex()
-                    .gap(px(8.))
-                    .children(if empty {
-                        vec![div()
-                            .text_color(rgb(0x6E6E6E))
-                            .child("No pull requests yet")
-                            .into_any_element()]
-                    } else {
-                        grouped(pulls)
-                            .into_iter()
-                            .map(|pull| pull_row(pull, cx).into_any_element())
+                    .pt(px(56.))
+                    .px(px(24.))
+                    .text_color(rgb(0x6E6E6E))
+                    .child("No pull requests yet")
+                    .into_any_element()
+            } else {
+                v_virtual_list(
+                    cx.entity(),
+                    "pulls",
+                    sizes,
+                    |home, range, _, cx| {
+                        range
+                            .filter_map(|index| home.rows.get(index).cloned())
+                            .map(|pull| {
+                                div()
+                                    .w_full()
+                                    .h(px(ROW_HEIGHT))
+                                    .px(px(24.))
+                                    .child(
+                                        div()
+                                            .w_full()
+                                            .max_w(px(560.))
+                                            .mx_auto()
+                                            .child(pull_row(pull, cx)),
+                                    )
+                            })
                             .collect()
-                    }),
-            )
+                    },
+                )
+                .track_scroll(&self.scroll)
+                .pt(px(56.))
+                .pb(px(24.))
+                .into_any_element()
+            })
     }
 }
