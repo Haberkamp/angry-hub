@@ -5,6 +5,7 @@ use gpui::{
 };
 use gpui_base::{Button, StyledExt as _};
 
+mod auth;
 mod chrome;
 mod color;
 mod frame;
