@@ -1,7 +1,7 @@
 use gpui::prelude::*;
 use gpui::{
     Context, Entity, EventEmitter, IntoElement, MouseButton, PromptButton, PromptLevel, Render,
-    Window, div, px, rgb, svg,
+    Transformation, Window, div, point, px, rgb, svg,
 };
 use gpui_base::StyledExt as _;
 
@@ -68,6 +68,7 @@ pub fn logout_button(home: Entity<Home>) -> impl IntoElement {
             svg()
                 .data(icon::LOGOUT)
                 .size(px(16.))
+                .with_transformation(Transformation::translate(point(px(-1.), px(0.))))
                 .text_color(rgb(0x6E6E6E))
                 .group_hover("logout", |style| style.text_color(rgb(0xffffff))),
         )
