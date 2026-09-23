@@ -3,8 +3,8 @@ use std::time::Duration;
 
 use gpui::prelude::*;
 use gpui::{
-    App, Context, Entity, EventEmitter, IntoElement, MouseButton, PromptButton, PromptLevel,
-    Render, Transformation, Window, div, point, px, rgb, size, svg,
+    App, Context, Entity, EventEmitter, FontWeight, IntoElement, MouseButton, PromptButton,
+    PromptLevel, Render, Transformation, Window, div, point, px, rgb, size, svg,
 };
 use gpui_base::StyledExt as _;
 use gpui_base::{VirtualListScrollHandle, v_virtual_list};
@@ -335,9 +335,26 @@ impl Render for Home {
         div()
             .flex_1()
             .size_full()
+            .flex()
+            .flex_col()
+            .child(
+                div()
+                    .pt(px(96.))
+                    .px(px(24.))
+                    .pb(px(16.))
+                    .child(
+                        div()
+                            .w_full()
+                            .max_w(px(560.))
+                            .mx_auto()
+                            .text_3xl()
+                            .font_weight(FontWeight::SEMIBOLD)
+                            .text_color(rgb(0xffffff))
+                            .child("Pull Requests"),
+                    ),
+            )
             .child(if empty {
                 div()
-                    .pt(px(56.))
                     .px(px(24.))
                     .text_color(rgb(0x6E6E6E))
                     .child("No pull requests yet")
@@ -367,7 +384,7 @@ impl Render for Home {
                     },
                 )
                 .track_scroll(&self.scroll)
-                .pt(px(56.))
+                .flex_1()
                 .pb(px(24.))
                 .into_any_element()
             })
