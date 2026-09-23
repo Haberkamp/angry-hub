@@ -16,14 +16,9 @@ entitlements := "assets/macos/entitlements.plist"
 setup:
     rustup component add rustfmt clippy
 
-# Run the app with auto-update disabled.
+# Run the app. Data goes to Application Support/Angry Hub Dev.
 run *args:
-    ANGRY_HUB_DISABLE_AUTO_UPDATE=1 cargo run {{args}}
-
-# Build the .app and embed the Icon Composer Tahoe icon (Assets.car).
-bundle:
-    cargo bundle --release --format osx
-    bash scripts/embed-app-icon.sh
+    ANGRY_HUB_DATA_DIR="Angry Hub Dev" cargo run {{args}}
 
 # Format Rust sources.
 fmt:
@@ -37,9 +32,69 @@ lint:
 test:
     cargo test --locked --all-targets --all-features
 
+# Delete the local pull request database so the next launch syncs from scratch.
+reset-db:
+    rm -f "$HOME/Library/Application Support/Angry Hub Dev/homestead.db" \
+        "$HOME/Library/Application Support/Angry Hub Dev/homestead.db-wal" \
+        "$HOME/Library/Application Support/Angry Hub Dev/homestead.db-shm"
+
+# Build the .app and embed the Icon Composer Tahoe icon (Assets.car).
+bundle:
+    cargo bundle --release --format osx
+    bash scripts/embed-app-icon.sh
+
 # Save App Store Connect credentials for notarization (interactive).
 setup-notary:
     xcrun notarytool store-credentials {{notary_profile}} --team-id 7SG72YY7UD
+
+# Bundle, Developer ID sign, notarize, and staple a local .app. Does not publish.
+sign:
+    #!/usr/bin/env bash
+    set -euo pipefail
+
+    if [[ "$(uname -s)" != "Darwin" ]]; then
+        echo "error: signing must run on macOS" >&2
+        exit 1
+    fi
+    if ! security find-identity -v -p codesigning | grep -F "{{codesign_identity}}" >/dev/null; then
+        echo "error: missing signing identity: {{codesign_identity}}" >&2
+        exit 1
+    fi
+    if ! xcrun notarytool history --keychain-profile "{{notary_profile}}" >/dev/null 2>&1; then
+        echo "error: notarytool profile '{{notary_profile}}' is missing. Run: just setup-notary" >&2
+        exit 1
+    fi
+
+    export ANGRY_HUB_DATA_DIR="Angry Hub Dev"
+    just bundle
+
+    app="target/release/bundle/osx/{{app_name}}.app"
+    bin="$app/Contents/MacOS/angry-hub"
+    zip="/tmp/angry-hub-notarize.zip"
+
+    if [[ ! -d "$app" ]]; then
+        echo "error: expected bundle at $app" >&2
+        exit 1
+    fi
+
+    codesign --force --timestamp --options runtime \
+        --identifier "{{bundle_identifier}}" \
+        --entitlements "{{entitlements}}" \
+        --sign "{{codesign_identity}}" \
+        "$bin"
+    codesign --force --timestamp --options runtime \
+        --entitlements "{{entitlements}}" \
+        --sign "{{codesign_identity}}" \
+        "$app"
+    codesign --verify --strict --verbose=2 "$app"
+
+    rm -f "$zip"
+    ditto -c -k --keepParent "$app" "$zip"
+    xcrun notarytool submit "$zip" --keychain-profile "{{notary_profile}}" --wait
+    xcrun stapler staple "$app"
+    rm -f "$zip"
+
+    echo "Signed and notarized $app"
 
 # Bump Cargo version, build/sign/notarize the .app, then publish a GitHub Release.
 release version: (_assert_release_allowed)

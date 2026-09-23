@@ -1,0 +1,12 @@
+pub const CHECK: &[u8] = include_bytes!("../assets/icons/check.svg");
+pub const ELLIPSIS: &[u8] = include_bytes!("../assets/icons/ellipsis.svg");
+pub const CHEVRON_LEFT: &[u8] = include_bytes!("../assets/icons/chevron_left.svg");
+pub const GITHUB: &[u8] = include_bytes!("../assets/icons/github.svg");
+pub const LOGOUT: &[u8] = include_bytes!("../assets/icons/logout.svg");
+pub const MERGE_CONFLICTS: &[u8] = include_bytes!("../assets/icons/merge_conflicts.svg");
+pub const PENDING: &[u8] = include_bytes!("../assets/icons/pending.svg");
+pub const PR_CLOSED: &[u8] = include_bytes!("../assets/icons/pr_closed.svg");
+pub const PR_DRAFT: &[u8] = include_bytes!("../assets/icons/pr_draft.svg");
+pub const PULL_REQUEST: &[u8] = include_bytes!("../assets/icons/pull_request.svg");
+pub const TOOLTIP_ARROW: &[u8] = include_bytes!("../assets/icons/tooltip_arrow.svg");
+pub const X: &[u8] = include_bytes!("../assets/icons/x.svg");
