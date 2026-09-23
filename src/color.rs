@@ -101,7 +101,11 @@ pub fn white() -> Hsla {
 }
 
 pub fn status_open(cx: &App) -> Hsla {
-    if is_dark(cx) { green(10, cx) } else { green(9, cx) }
+    if is_dark(cx) {
+        green(10, cx)
+    } else {
+        green(9, cx)
+    }
 }
 
 pub fn status_draft(cx: &App) -> Hsla {
@@ -113,9 +117,17 @@ pub fn status_closed(cx: &App) -> Hsla {
 }
 
 pub fn status_merged(cx: &App) -> Hsla {
-    if is_dark(cx) { violet(9, cx) } else { violet(10, cx) }
+    if is_dark(cx) {
+        violet(9, cx)
+    } else {
+        violet(10, cx)
+    }
 }
 
 pub fn status_pending(cx: &App) -> Hsla {
-    if is_dark(cx) { amber(8, cx) } else { amber(11, cx) }
+    if is_dark(cx) {
+        amber(8, cx)
+    } else {
+        amber(11, cx)
+    }
 }

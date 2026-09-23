@@ -136,8 +136,10 @@ pub trait Github {
         cursor: Option<&str>,
     ) -> Result<PullPage, GithubError>;
     fn close_pull_request(&self, token: &str, id: &str) -> Result<(), GithubError>;
-    fn set_pull_request_draft(&self, token: &str, id: &str, draft: bool) -> Result<(), GithubError>;
-    fn oauth_app_restricted(&self, token: &str, name_with_owner: &str) -> Result<bool, GithubError>;
+    fn set_pull_request_draft(&self, token: &str, id: &str, draft: bool)
+    -> Result<(), GithubError>;
+    fn oauth_app_restricted(&self, token: &str, name_with_owner: &str)
+    -> Result<bool, GithubError>;
 }
 
 pub struct FakeGithub {
@@ -315,7 +317,12 @@ impl<H: Http> Github for GithubClient<H> {
         self.mutate(token, MUTATION, id)
     }
 
-    fn set_pull_request_draft(&self, token: &str, id: &str, draft: bool) -> Result<(), GithubError> {
+    fn set_pull_request_draft(
+        &self,
+        token: &str,
+        id: &str,
+        draft: bool,
+    ) -> Result<(), GithubError> {
         const TO_DRAFT: &str = r#"
             mutation($id: ID!) {
               convertPullRequestToDraft(input: { pullRequestId: $id }) {
@@ -333,7 +340,11 @@ impl<H: Http> Github for GithubClient<H> {
         self.mutate(token, if draft { TO_DRAFT } else { READY }, id)
     }
 
-    fn oauth_app_restricted(&self, token: &str, name_with_owner: &str) -> Result<bool, GithubError> {
+    fn oauth_app_restricted(
+        &self,
+        token: &str,
+        name_with_owner: &str,
+    ) -> Result<bool, GithubError> {
         let Some((owner, name)) = name_with_owner.split_once('/') else {
             return Ok(false);
         };
@@ -355,7 +366,9 @@ impl<H: Http> GithubClient<H> {
             "query": mutation,
             "variables": { "id": id },
         });
-        let response = self.http.post_bearer(GRAPHQL_URL, token, &body.to_string())?;
+        let response = self
+            .http
+            .post_bearer(GRAPHQL_URL, token, &body.to_string())?;
         parse_mutation(&response)
     }
 
@@ -363,7 +376,9 @@ impl<H: Http> GithubClient<H> {
         let body = serde_json::json!({
             "query": "query { viewer { login } }",
         });
-        let response = self.http.post_bearer(GRAPHQL_URL, token, &body.to_string())?;
+        let response = self
+            .http
+            .post_bearer(GRAPHQL_URL, token, &body.to_string())?;
         #[derive(Deserialize)]
         struct Body {
             data: Option<ViewerData>,
@@ -462,7 +477,10 @@ fn parse_pull_page(body: &str) -> Result<PullPage, GithubError> {
     Ok(PullPage {
         pulls,
         has_next_page: search.page_info.has_next_page,
-        end_cursor: search.page_info.end_cursor.filter(|cursor| !cursor.is_empty()),
+        end_cursor: search
+            .page_info
+            .end_cursor
+            .filter(|cursor| !cursor.is_empty()),
     })
 }
 
@@ -473,7 +491,9 @@ fn remote_pull(node: PullNode) -> Result<RemotePull, GithubError> {
         ("OPEN", true) => "draft",
         ("OPEN", false) => "open",
         (other, _) => {
-            return Err(GithubError::new(format!("unknown pull request state: {other}")));
+            return Err(GithubError::new(format!(
+                "unknown pull request state: {other}"
+            )));
         }
     };
     Ok(RemotePull {
@@ -486,12 +506,13 @@ fn remote_pull(node: PullNode) -> Result<RemotePull, GithubError> {
             .repository
             .map(|repo| repo.name_with_owner)
             .unwrap_or_default(),
-        author: node
-            .author
-            .map(|author| author.login)
-            .unwrap_or_default(),
+        author: node.author.map(|author| author.login).unwrap_or_default(),
         updated_at: node.updated_at,
-        ci: ci_status(node.status_check_rollup.as_ref().and_then(|rollup| rollup.state.as_deref())),
+        ci: ci_status(
+            node.status_check_rollup
+                .as_ref()
+                .and_then(|rollup| rollup.state.as_deref()),
+        ),
         approvals: node
             .latest_opinionated_reviews
             .as_ref()
@@ -504,7 +525,10 @@ fn remote_pull(node: PullNode) -> Result<RemotePull, GithubError> {
                     .count() as i64
             })
             .unwrap_or(0),
-        required_approvals: required_approvals(node.base_ref.as_ref(), node.review_decision.as_deref()),
+        required_approvals: required_approvals(
+            node.base_ref.as_ref(),
+            node.review_decision.as_deref(),
+        ),
         has_conflicts: node.mergeable.as_deref() == Some("CONFLICTING"),
         branch: node.head_ref_name,
     })
@@ -765,7 +789,9 @@ impl Http for ReqwestHttp {
             .text()
             .map_err(|error| GithubError::new(format!("failed to read response: {error}")))?;
         if status >= 400 && status != 403 {
-            return Err(GithubError::new(format!("request failed ({status}): {text}")));
+            return Err(GithubError::new(format!(
+                "request failed ({status}): {text}"
+            )));
         }
         Ok((status, text))
     }
@@ -900,11 +926,19 @@ mod tests {
             .unwrap();
 
         assert_eq!(*http.url.lock().unwrap(), GRAPHQL_URL);
-        assert!(http.body.lock().unwrap().contains("author:@me is:pr is:open"));
+        assert!(
+            http.body
+                .lock()
+                .unwrap()
+                .contains("author:@me is:pr is:open")
+        );
         assert!(page.has_next_page);
         assert_eq!(page.end_cursor.as_deref(), Some("cursor"));
         assert_eq!(
-            page.pulls.iter().map(|pr| pr.state.as_str()).collect::<Vec<_>>(),
+            page.pulls
+                .iter()
+                .map(|pr| pr.state.as_str())
+                .collect::<Vec<_>>(),
             vec!["open", "draft", "closed", "merged"]
         );
     }

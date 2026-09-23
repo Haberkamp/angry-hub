@@ -1,7 +1,7 @@
 use homestead::Table;
 
 use crate::github::{Github, GithubError, RemotePull};
-use crate::pulls::{self, Event, PullRequest, SyncState, SYNC_ROW};
+use crate::pulls::{self, Event, PullRequest, SYNC_ROW, SyncState};
 
 pub struct FetchedPulls {
     pub pulls: Vec<PullRequest>,
@@ -215,8 +215,8 @@ mod tests {
             include_str!("../migrations/002_branch.sql"),
         )
         .unwrap();
-        let mut store = homestead::Store::open(&dir.join("db"), &dir, crate::pulls::PullMutator)
-            .unwrap();
+        let mut store =
+            homestead::Store::open(&dir.join("db"), &dir, crate::pulls::PullMutator).unwrap();
 
         let open = into_pull(remote("1", "open"));
         let first = apply(&mut store, &[open.clone()], true).unwrap();

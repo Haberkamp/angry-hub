@@ -45,7 +45,10 @@ pub struct PullMutator;
 impl Mutator<Event> for PullMutator {
     fn apply(&self, tx: &Transaction<'_>, event: &Event) -> rusqlite::Result<()> {
         match event {
-            Event::PrOpened(pr) | Event::PrUpdated(pr) | Event::PrClosed(pr) | Event::PrMerged(pr) => {
+            Event::PrOpened(pr)
+            | Event::PrUpdated(pr)
+            | Event::PrClosed(pr)
+            | Event::PrMerged(pr) => {
                 upsert_pull(tx, pr)?;
             }
             Event::Watermark { at } => {
@@ -205,10 +208,7 @@ mod tests {
 
     #[test]
     fn visible_query_keeps_open_draft_and_recently_merged() {
-        let dir = std::env::temp_dir().join(format!(
-            "angry-hub-visible-{}",
-            std::process::id()
-        ));
+        let dir = std::env::temp_dir().join(format!("angry-hub-visible-{}", std::process::id()));
         let _ = fs::remove_dir_all(&dir);
         fs::create_dir_all(&dir).unwrap();
         let mut store = Store::open(dir.join("db"), migrations_dir(), PullMutator).unwrap();
@@ -234,10 +234,7 @@ mod tests {
 
     #[test]
     fn initial_query_is_open_pulls_sorted_by_update() {
-        assert_eq!(
-            search_query(None),
-            "author:@me is:pr sort:updated-desc"
-        );
+        assert_eq!(search_query(None), "author:@me is:pr sort:updated-desc");
     }
 
     #[test]

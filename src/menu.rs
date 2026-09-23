@@ -55,9 +55,7 @@ fn menus() -> [Menu; 4] {
             MenuItem::os_action("Paste", Paste, OsAction::Paste),
             MenuItem::os_action("Select All", SelectAll, OsAction::SelectAll),
         ]),
-        Menu::new("View").items([
-            MenuItem::action("Enter Full Screen", ToggleFullScreen),
-        ]),
+        Menu::new("View").items([MenuItem::action("Enter Full Screen", ToggleFullScreen)]),
         Menu::new("Window").items([
             MenuItem::action("Minimize", MinimizeWindow),
             MenuItem::action("Zoom", ZoomWindow),

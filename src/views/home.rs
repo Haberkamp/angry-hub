@@ -3,8 +3,8 @@ use std::time::Duration;
 
 use gpui::prelude::*;
 use gpui::{
-    App, ClipboardItem, Context, Entity, EventEmitter, FontWeight,
-    IntoElement, MouseButton, PromptButton, PromptLevel, Render, Transformation,     Window, div, point, px, rgb, size, svg,
+    App, ClipboardItem, Context, Entity, EventEmitter, FontWeight, IntoElement, MouseButton,
+    PromptButton, PromptLevel, Render, Transformation, Window, div, point, px, rgb, size, svg,
 };
 use gpui_base::StyledExt as _;
 use gpui_base::{VirtualListScrollHandle, v_virtual_list};
@@ -17,10 +17,10 @@ use crate::dropdown::{Dropdown, MenuItem};
 use crate::tooltip::Tooltip;
 use homestead::Table;
 
-use crate::github::{Github, GithubClient, ReqwestHttp, GITHUB_CLIENT_ID};
+use crate::github::{GITHUB_CLIENT_ID, Github, GithubClient, ReqwestHttp};
 use crate::icon;
 use crate::keychain::CredentialStore;
-use crate::pulls::{self, Event, PullRequest, SyncState, SYNC_ROW};
+use crate::pulls::{self, Event, PullRequest, SYNC_ROW, SyncState};
 use crate::sync;
 
 const INSET: f32 = 12.;
@@ -74,15 +74,14 @@ impl Home {
                 cx.background_executor()
                     .timer(Duration::from_secs(30))
                     .await;
-                let refreshed = this.update(cx, |this, cx| {
-                    match this.store.watch(pulls::visible()) {
+                let refreshed =
+                    this.update(cx, |this, cx| match this.store.watch(pulls::visible()) {
                         Ok(pulls) => {
                             this.pulls = pulls;
                             cx.notify();
                         }
                         Err(error) => eprintln!("failed to refresh pull requests: {error}"),
-                    }
-                });
+                    });
                 if refreshed.is_err() {
                     break;
                 }
@@ -106,28 +105,22 @@ impl Home {
                             sync::fetch_authored(&github, &job.token, &job.query, job.limit)
                         })
                         .await;
-                    let applied = this.update(cx, |this, cx| {
-                        match fetched {
-                            Ok(fetched) => {
-                                match sync::apply(
-                                    &mut this.store,
-                                    &fetched.pulls,
-                                    fetched.complete,
-                                ) {
-                                    Ok(merged) => {
-                                        for pull in merged {
-                                            sync::notify_merged(&pull);
-                                        }
-                                    }
-                                    Err(error) => {
-                                        eprintln!("failed to store pull requests: {error}");
+                    let applied = this.update(cx, |this, cx| match fetched {
+                        Ok(fetched) => {
+                            match sync::apply(&mut this.store, &fetched.pulls, fetched.complete) {
+                                Ok(merged) => {
+                                    for pull in merged {
+                                        sync::notify_merged(&pull);
                                     }
                                 }
-                                cx.notify();
+                                Err(error) => {
+                                    eprintln!("failed to store pull requests: {error}");
+                                }
                             }
-                            Err(error) => {
-                                eprintln!("failed to fetch pull requests: {}", error.message());
-                            }
+                            cx.notify();
+                        }
+                        Err(error) => {
+                            eprintln!("failed to fetch pull requests: {}", error.message());
                         }
                     });
                     if applied.is_err() {
@@ -344,7 +337,6 @@ impl Home {
         auth.logout(&CredentialStore);
         cx.emit(LoggedOut);
     }
-
 }
 
 impl EventEmitter<LoggedOut> for Home {}
@@ -372,10 +364,7 @@ pub fn logout_button(home: Entity<Home>) -> impl IntoElement {
                 PromptLevel::Warning,
                 "Log out?",
                 Some("Are you sure you want to log out?"),
-                &[
-                    PromptButton::ok("Log out"),
-                    PromptButton::cancel("Cancel"),
-                ],
+                &[PromptButton::ok("Log out"), PromptButton::cancel("Cancel")],
                 cx,
             );
             home.update(cx, |_, cx| {
@@ -533,14 +522,17 @@ fn pull_row(
                         )
                         .when(pull.has_conflicts, |row| {
                             row.child(
-                                Tooltip::new(format!("pr-conflicts-{}", pull.id), "Merge conflicts")
-                                    .child(
-                                        svg()
-                                            .data(icon::MERGE_CONFLICTS)
-                                            .size(px(16.))
-                                            .flex_none()
-                                            .text_color(color::status_pending(cx)),
-                                    ),
+                                Tooltip::new(
+                                    format!("pr-conflicts-{}", pull.id),
+                                    "Merge conflicts",
+                                )
+                                .child(
+                                    svg()
+                                        .data(icon::MERGE_CONFLICTS)
+                                        .size(px(16.))
+                                        .flex_none()
+                                        .text_color(color::status_pending(cx)),
+                                ),
                             )
                         }),
                 )
@@ -637,21 +629,17 @@ impl Render for Home {
             .flex()
             .flex_col()
             .child(
-                div()
-                    .pt(px(96.))
-                    .px(px(24.))
-                    .pb(px(16.))
-                    .child(
-                        div()
-                            .w_full()
-                            .max_w(px(560.))
-                            .mx_auto()
-                            .pl(px(40.))
-                            .text_3xl()
-                            .font_weight(FontWeight::SEMIBOLD)
-                            .text_color(rgb(0xffffff))
-                            .child("Pull Requests"),
-                    ),
+                div().pt(px(96.)).px(px(24.)).pb(px(16.)).child(
+                    div()
+                        .w_full()
+                        .max_w(px(560.))
+                        .mx_auto()
+                        .pl(px(40.))
+                        .text_3xl()
+                        .font_weight(FontWeight::SEMIBOLD)
+                        .text_color(rgb(0xffffff))
+                        .child("Pull Requests"),
+                ),
             )
             .child(if empty {
                 div()
@@ -667,29 +655,21 @@ impl Render for Home {
                     )
                     .into_any_element()
             } else {
-                v_virtual_list(
-                    cx.entity(),
-                    "pulls",
-                    sizes,
-                    move |home, range, _, cx| {
-                        range
-                            .filter_map(|index| home.rows.get(index).cloned())
-                            .map(|pull| {
-                                div()
-                                    .w_full()
-                                    .h(px(ROW_HEIGHT))
-                                    .px(px(24.))
-                                    .child(
-                                        div()
-                                            .w_full()
-                                            .max_w(px(560.))
-                                            .mx_auto()
-                                            .child(pull_row(pull, home, skip_menu_exit, cx)),
-                                    )
-                            })
-                            .collect()
-                    },
-                )
+                v_virtual_list(cx.entity(), "pulls", sizes, move |home, range, _, cx| {
+                    range
+                        .filter_map(|index| home.rows.get(index).cloned())
+                        .map(|pull| {
+                            div().w_full().h(px(ROW_HEIGHT)).px(px(24.)).child(
+                                div().w_full().max_w(px(560.)).mx_auto().child(pull_row(
+                                    pull,
+                                    home,
+                                    skip_menu_exit,
+                                    cx,
+                                )),
+                            )
+                        })
+                        .collect()
+                })
                 .track_scroll(&self.scroll)
                 .flex_1()
                 .pb(px(24.))
