@@ -34,6 +34,7 @@ struct SyncJob {
     token: String,
     query: String,
     limit: usize,
+    initial: bool,
 }
 
 pub struct Home {
@@ -101,6 +102,7 @@ impl Home {
                     break;
                 };
                 if let Some(job) = job {
+                    let started = std::time::Instant::now();
                     let fetched = cx
                         .background_executor()
                         .spawn(async move {
@@ -108,12 +110,15 @@ impl Home {
                             sync::fetch_authored(&github, &job.token, &job.query, job.limit)
                         })
                         .await;
+                    let elapsed = started.elapsed().as_millis() as u64;
                     let applied = this.update(cx, |this, cx| match fetched {
                         Ok(fetched) => {
                             crate::log_info!(
                                 "sync_completed",
                                 "count" => fetched.pulls.len(),
+                                "initial" => job.initial,
                                 "complete" => fetched.complete,
+                                "elapsed_ms" => elapsed,
                             );
                             match sync::apply(&mut this.store, &fetched.pulls, fetched.complete) {
                                 Ok(merged) => {
@@ -133,7 +138,8 @@ impl Home {
                         Err(error) => {
                             crate::log_error!(
                                 "fetch_failed",
-                                "error" => error.message()
+                                "error" => error.message(),
+                                "initial" => job.initial,
                             );
                         }
                     });
@@ -160,10 +166,16 @@ impl Home {
             .into_iter()
             .next()
             .map(|state| state.watermark);
+        let initial = watermark.is_none();
         Some(SyncJob {
             token,
             query: pulls::search_query(watermark.as_deref()),
-            limit: pulls::INITIAL_LIMIT,
+            limit: if initial {
+                pulls::INITIAL_LIMIT
+            } else {
+                pulls::BACKGROUND_LIMIT
+            },
+            initial,
         })
     }
 

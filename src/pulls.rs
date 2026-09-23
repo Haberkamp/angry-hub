@@ -7,6 +7,7 @@ use homestead::{Mutator, Store, Table};
 
 pub const SYNC_ROW: &str = "github";
 pub const INITIAL_LIMIT: usize = 500;
+pub const BACKGROUND_LIMIT: usize = 50;
 
 #[derive(Clone, Debug, PartialEq, Eq, Table)]
 pub struct PullRequest {
@@ -148,12 +149,11 @@ pub fn search_query(watermark: Option<&str>) -> String {
     }
 }
 
-/// Advance the watermark only after a complete fetch. A truncated fetch keeps
-/// the previous mark so the next sync still sees the rest of the window.
-pub fn next_watermark(previous: Option<&str>, remote: &[PullRequest], complete: bool) -> String {
-    if !complete {
-        return previous.unwrap_or("1970-01-01T00:00:00Z").to_string();
-    }
+/// Advance the watermark to the newest `updated_at` seen, even when the fetch
+/// was truncated: the query sorts `updated-desc`, so anything skipped by the
+/// cap is older than the watermark and intentionally excluded from later
+/// syncs. On an empty result set the mark stays put.
+pub fn next_watermark(previous: Option<&str>, remote: &[PullRequest], _complete: bool) -> String {
     let newest = remote.iter().map(|pr| pr.updated_at.as_str()).max();
     match (previous, newest) {
         (Some(previous), Some(newest)) if previous > newest => previous.to_string(),
@@ -276,10 +276,18 @@ mod tests {
     }
 
     #[test]
-    fn watermark_stays_put_when_the_fetch_is_truncated() {
+    fn watermark_advances_even_when_the_fetch_is_truncated() {
         let remote = vec![pr("a", "open", "2024-06-01T00:00:00Z")];
         assert_eq!(
             next_watermark(Some("2024-01-01T00:00:00Z"), &remote, false),
+            "2024-06-01T00:00:00Z"
+        );
+    }
+
+    #[test]
+    fn watermark_stays_put_when_nothing_was_fetched() {
+        assert_eq!(
+            next_watermark(Some("2024-01-01T00:00:00Z"), &[], false),
             "2024-01-01T00:00:00Z"
         );
     }
