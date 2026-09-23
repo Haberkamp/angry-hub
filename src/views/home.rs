@@ -80,7 +80,10 @@ impl Home {
                             this.pulls = pulls;
                             cx.notify();
                         }
-                        Err(error) => eprintln!("failed to refresh pull requests: {error}"),
+                        Err(error) => crate::log_error!(
+                            "refresh_failed",
+                            "error" => error.to_string()
+                        ),
                     });
                 if refreshed.is_err() {
                     break;
@@ -107,6 +110,11 @@ impl Home {
                         .await;
                     let applied = this.update(cx, |this, cx| match fetched {
                         Ok(fetched) => {
+                            crate::log_info!(
+                                "sync_completed",
+                                "count" => fetched.pulls.len(),
+                                "complete" => fetched.complete,
+                            );
                             match sync::apply(&mut this.store, &fetched.pulls, fetched.complete) {
                                 Ok(merged) => {
                                     for pull in merged {
@@ -114,13 +122,19 @@ impl Home {
                                     }
                                 }
                                 Err(error) => {
-                                    eprintln!("failed to store pull requests: {error}");
+                                    crate::log_error!(
+                                        "apply_failed",
+                                        "error" => error.to_string()
+                                    );
                                 }
                             }
                             cx.notify();
                         }
                         Err(error) => {
-                            eprintln!("failed to fetch pull requests: {}", error.message());
+                            crate::log_error!(
+                                "fetch_failed",
+                                "error" => error.message()
+                            );
                         }
                     });
                     if applied.is_err() {
@@ -296,7 +310,10 @@ impl Home {
                             Event::PrUpdated(updated)
                         };
                         if let Err(error) = this.store.commit(event) {
-                            eprintln!("failed to store pull request: {error}");
+                            crate::log_error!(
+                                "commit_failed",
+                                "error" => error.to_string()
+                            );
                         }
                         this.menu_skip_exit = true;
                         this.finish_action(cx);
@@ -318,7 +335,10 @@ impl Home {
                     .ok();
                 }
                 Err(error) => {
-                    eprintln!("failed to update pull request: {}", error.message());
+                    crate::log_error!(
+                        "update_failed",
+                        "error" => error.message()
+                    );
                     this.update(cx, |this, cx| this.finish_action(cx)).ok();
                 }
             }

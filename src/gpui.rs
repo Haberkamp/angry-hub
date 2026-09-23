@@ -14,6 +14,7 @@ mod frame;
 mod github;
 mod icon;
 mod keychain;
+mod log;
 mod menu;
 mod paths;
 mod pulls;
@@ -181,6 +182,7 @@ fn open_window(cx: &mut gpui::App) {
 }
 
 fn main() {
+    crate::log_info!("app_start", "version" => env!("CARGO_PKG_VERSION"));
     let app = gpui_platform::application();
 
     app.on_reopen(|cx| {

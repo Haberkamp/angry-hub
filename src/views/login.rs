@@ -135,6 +135,10 @@ impl Login {
                     login.poll(device_code, interval, generation, cx);
                 }
                 Err(error) => {
+                    crate::log_error!(
+                        "device_flow_failed",
+                        "error" => error.message()
+                    );
                     login.error = Some(error.message().to_string());
                     cx.notify();
                 }
@@ -175,8 +179,17 @@ impl Login {
                             }
                             Ok(DevicePoll::Approved(tokens)) => {
                                 match login.finish(tokens) {
-                                    Ok(()) => cx.emit(LoggedIn),
-                                    Err(error) => login.error = Some(error),
+                                    Ok(()) => {
+                                        crate::log_info!("login_approved");
+                                        cx.emit(LoggedIn);
+                                    }
+                                    Err(error) => {
+                                        crate::log_error!(
+                                            "login_persist_failed",
+                                            "error" => error.clone()
+                                        );
+                                        login.error = Some(error);
+                                    }
                                 }
                                 cx.notify();
                                 true

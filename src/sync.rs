@@ -111,7 +111,7 @@ pub fn notify_merged(pull: &PullRequest) {
         .body(&body)
         .show()
     {
-        eprintln!("failed to notify about merged pull request: {error}");
+        crate::log_error!("notify_failed", "error" => error.to_string(), "pull" => body);
     }
 }
 
