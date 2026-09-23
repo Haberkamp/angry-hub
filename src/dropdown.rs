@@ -50,6 +50,7 @@ pub struct Dropdown {
     id: SharedString,
     open: bool,
     disabled: bool,
+    skip_exit_animation: bool,
     items: Vec<MenuItem>,
     on_toggle: Option<Box<dyn Fn(&mut Window, &mut App) + 'static>>,
     on_dismiss: Option<Box<dyn Fn(&mut Window, &mut App) + 'static>>,
@@ -62,6 +63,7 @@ impl Dropdown {
             id: id.into(),
             open: false,
             disabled: false,
+            skip_exit_animation: false,
             items: Vec::new(),
             on_toggle: None,
             on_dismiss: None,
@@ -77,6 +79,12 @@ impl Dropdown {
     /// While an action is in flight, every item ignores clicks.
     pub fn disabled(mut self, disabled: bool) -> Self {
         self.disabled = disabled;
+        self
+    }
+
+    /// Drop the panel immediately instead of playing the exit animation.
+    pub fn skip_exit_animation(mut self, skip: bool) -> Self {
+        self.skip_exit_animation = skip;
         self
     }
 
@@ -105,12 +113,17 @@ impl RenderOnce for Dropdown {
     fn render(self, window: &mut Window, cx: &mut App) -> impl IntoElement {
         let open = self.open;
         let disabled = self.disabled;
+        let skip_exit_animation = self.skip_exit_animation;
         let presence = window.use_keyed_state(self.id.clone(), cx, |_, _| MenuPresence::default());
         let mut shown = presence.read(cx).clone();
         let visible = if open {
             shown.shown = true;
             shown.closing_at = None;
             true
+        } else if skip_exit_animation {
+            shown.shown = false;
+            shown.closing_at = None;
+            false
         } else if shown.shown {
             let started = shown.closing_at.get_or_insert_with(Instant::now);
             if started.elapsed() < PANEL_ANIMATION {

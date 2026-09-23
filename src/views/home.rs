@@ -42,6 +42,7 @@ pub struct Home {
     rows: Vec<PullRequest>,
     scroll: VirtualListScrollHandle,
     menu_open: Option<String>,
+    menu_skip_exit: bool,
     pending: Option<String>,
     toaster: Toaster,
 }
@@ -56,6 +57,7 @@ impl Home {
             rows: Vec::new(),
             scroll: VirtualListScrollHandle::new(),
             menu_open: None,
+            menu_skip_exit: false,
             pending: None,
             toaster: Toaster::default(),
         };
@@ -303,6 +305,7 @@ impl Home {
                         if let Err(error) = this.store.commit(event) {
                             eprintln!("failed to store pull request: {error}");
                         }
+                        this.menu_skip_exit = true;
                         this.finish_action(cx);
                     })
                     .ok();
@@ -470,7 +473,12 @@ fn prompt_oauth_restricted(
     .detach();
 }
 
-fn pull_row(pull: PullRequest, home: &Home, cx: &mut Context<Home>) -> impl IntoElement {
+fn pull_row(
+    pull: PullRequest,
+    home: &Home,
+    skip_menu_exit: bool,
+    cx: &mut Context<Home>,
+) -> impl IntoElement {
     let url = pull.url.clone();
     let meta = color::gray(11, cx);
     let show_approvals = pull.required_approvals > 0;
@@ -573,6 +581,7 @@ fn pull_row(pull: PullRequest, home: &Home, cx: &mut Context<Home>) -> impl Into
             let entity = cx.entity();
             Dropdown::new(format!("pr-menu-{menu_id}"))
                 .open(open)
+                .skip_exit_animation(skip_menu_exit)
                 .disabled(pending)
                 .items(vec![
                     MenuItem::new("copy-branch", "Copy branch name"),
@@ -616,6 +625,8 @@ fn pull_row(pull: PullRequest, home: &Home, cx: &mut Context<Home>) -> impl Into
 impl Render for Home {
     fn render(&mut self, _: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         self.rows = self.pulls.rows();
+        let skip_menu_exit = self.menu_skip_exit;
+        self.menu_skip_exit = false;
         let empty = self.rows.is_empty();
         let count = self.rows.len();
         let sizes = Rc::new(vec![size(px(560.), px(ROW_HEIGHT)); count]);
@@ -660,7 +671,7 @@ impl Render for Home {
                     cx.entity(),
                     "pulls",
                     sizes,
-                    |home, range, _, cx| {
+                    move |home, range, _, cx| {
                         range
                             .filter_map(|index| home.rows.get(index).cloned())
                             .map(|pull| {
@@ -673,7 +684,7 @@ impl Render for Home {
                                             .w_full()
                                             .max_w(px(560.))
                                             .mx_auto()
-                                            .child(pull_row(pull, home, cx)),
+                                            .child(pull_row(pull, home, skip_menu_exit, cx)),
                                     )
                             })
                             .collect()
