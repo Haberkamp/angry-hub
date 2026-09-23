@@ -635,6 +635,7 @@ impl Render for Home {
                             .w_full()
                             .max_w(px(560.))
                             .mx_auto()
+                            .pl(px(40.))
                             .text_3xl()
                             .font_weight(FontWeight::SEMIBOLD)
                             .text_color(rgb(0xffffff))
