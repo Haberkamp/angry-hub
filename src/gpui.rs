@@ -8,12 +8,14 @@ use gpui_base::StyledExt as _;
 mod auth;
 mod button;
 mod chrome;
+mod dropdown;
 mod color;
 mod frame;
 mod github;
 mod icon;
 mod pulls;
 mod sync;
+mod toast;
 mod keychain;
 mod session;
 mod tooltip;
@@ -76,7 +78,7 @@ impl Root {
 }
 
 impl Render for Root {
-    fn render(&mut self, _: &mut Window, _: &mut Context<Self>) -> impl IntoElement {
+    fn render(&mut self, _: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let (page, logout) = match &self.page {
             Page::Login(login) => (login.clone().into_any_element(), None),
             Page::Home(home) => (
@@ -88,6 +90,7 @@ impl Render for Root {
             .relative()
             .v_flex()
             .size_full()
+            .bg(color::gray(1, cx))
             .text_color(rgb(0xffffff))
             .child(page)
             .child(self.chrome.clone())

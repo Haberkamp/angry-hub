@@ -24,6 +24,7 @@ query AuthoredPulls($query: String!, $cursor: String) {
         isDraft
         url
         updatedAt
+        headRefName
         author { login }
         repository { nameWithOwner }
         mergeable
@@ -69,6 +70,18 @@ impl GithubError {
     pub fn message(&self) -> &str {
         &self.message
     }
+
+    pub fn is_oauth_app_restricted(&self) -> bool {
+        is_oauth_app_restricted_message(&self.message)
+    }
+
+    pub fn is_session_ended(&self) -> bool {
+        self.message.contains("Bad credentials") || self.message.contains("(401)")
+    }
+}
+
+pub fn is_oauth_app_restricted_message(message: &str) -> bool {
+    message.contains("OAuth App access restrictions")
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -102,6 +115,7 @@ pub struct RemotePull {
     pub approvals: i64,
     pub required_approvals: i64,
     pub has_conflicts: bool,
+    pub branch: String,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -121,6 +135,9 @@ pub trait Github {
         query: &str,
         cursor: Option<&str>,
     ) -> Result<PullPage, GithubError>;
+    fn close_pull_request(&self, token: &str, id: &str) -> Result<(), GithubError>;
+    fn set_pull_request_draft(&self, token: &str, id: &str, draft: bool) -> Result<(), GithubError>;
+    fn oauth_app_restricted(&self, token: &str, name_with_owner: &str) -> Result<bool, GithubError>;
 }
 
 pub struct FakeGithub {
@@ -169,11 +186,24 @@ impl Github for FakeGithub {
             end_cursor: None,
         })
     }
+
+    fn close_pull_request(&self, _: &str, _: &str) -> Result<(), GithubError> {
+        Ok(())
+    }
+
+    fn set_pull_request_draft(&self, _: &str, _: &str, _: bool) -> Result<(), GithubError> {
+        Ok(())
+    }
+
+    fn oauth_app_restricted(&self, _: &str, _: &str) -> Result<bool, GithubError> {
+        Ok(false)
+    }
 }
 
 pub(crate) trait Http {
     fn post_json(&self, url: &str, body: &str) -> Result<String, GithubError>;
     fn post_bearer(&self, url: &str, token: &str, body: &str) -> Result<String, GithubError>;
+    fn get_bearer(&self, url: &str, token: &str) -> Result<(u16, String), GithubError>;
 }
 
 impl<H: Http + ?Sized> Http for &H {
@@ -183,6 +213,10 @@ impl<H: Http + ?Sized> Http for &H {
 
     fn post_bearer(&self, url: &str, token: &str, body: &str) -> Result<String, GithubError> {
         (*self).post_bearer(url, token, body)
+    }
+
+    fn get_bearer(&self, url: &str, token: &str) -> Result<(u16, String), GithubError> {
+        (*self).get_bearer(url, token)
     }
 }
 
@@ -268,6 +302,94 @@ impl<H: Http> Github for GithubClient<H> {
             .http
             .post_bearer(GRAPHQL_URL, token, &body.to_string())?;
         parse_pull_page(&response)
+    }
+
+    fn close_pull_request(&self, token: &str, id: &str) -> Result<(), GithubError> {
+        const MUTATION: &str = r#"
+            mutation($id: ID!) {
+              closePullRequest(input: { pullRequestId: $id }) {
+                pullRequest { id state }
+              }
+            }
+        "#;
+        self.mutate(token, MUTATION, id)
+    }
+
+    fn set_pull_request_draft(&self, token: &str, id: &str, draft: bool) -> Result<(), GithubError> {
+        const TO_DRAFT: &str = r#"
+            mutation($id: ID!) {
+              convertPullRequestToDraft(input: { pullRequestId: $id }) {
+                pullRequest { id isDraft }
+              }
+            }
+        "#;
+        const READY: &str = r#"
+            mutation($id: ID!) {
+              markPullRequestReadyForReview(input: { pullRequestId: $id }) {
+                pullRequest { id isDraft }
+              }
+            }
+        "#;
+        self.mutate(token, if draft { TO_DRAFT } else { READY }, id)
+    }
+
+    fn oauth_app_restricted(&self, token: &str, name_with_owner: &str) -> Result<bool, GithubError> {
+        let Some((owner, name)) = name_with_owner.split_once('/') else {
+            return Ok(false);
+        };
+        let login = self.viewer_login(token)?;
+        if owner.eq_ignore_ascii_case(&login) {
+            return Ok(false);
+        }
+        let url =
+            format!("https://api.github.com/repos/{owner}/{name}/collaborators/{login}/permission");
+        let (status, body) = self.http.get_bearer(&url, token)?;
+        Ok(status == 403 && is_oauth_app_restricted_message(&body)
+            || is_oauth_app_restricted_message(&body))
+    }
+}
+
+impl<H: Http> GithubClient<H> {
+    fn mutate(&self, token: &str, mutation: &str, id: &str) -> Result<(), GithubError> {
+        let body = serde_json::json!({
+            "query": mutation,
+            "variables": { "id": id },
+        });
+        let response = self.http.post_bearer(GRAPHQL_URL, token, &body.to_string())?;
+        parse_mutation(&response)
+    }
+
+    fn viewer_login(&self, token: &str) -> Result<String, GithubError> {
+        let body = serde_json::json!({
+            "query": "query { viewer { login } }",
+        });
+        let response = self.http.post_bearer(GRAPHQL_URL, token, &body.to_string())?;
+        #[derive(Deserialize)]
+        struct Body {
+            data: Option<ViewerData>,
+            errors: Option<Vec<GraphqlError>>,
+        }
+        #[derive(Deserialize)]
+        struct ViewerData {
+            viewer: Option<AuthorNode>,
+        }
+        let parsed: Body = serde_json::from_str(&response)
+            .map_err(|error| GithubError::new(format!("invalid viewer response: {error}")))?;
+        if let Some(errors) = parsed.errors.filter(|errors| !errors.is_empty()) {
+            return Err(GithubError::new(
+                errors
+                    .into_iter()
+                    .map(|error| error.message)
+                    .collect::<Vec<_>>()
+                    .join("; "),
+            ));
+        }
+        parsed
+            .data
+            .and_then(|data| data.viewer)
+            .map(|viewer| viewer.login)
+            .filter(|login| !login.is_empty())
+            .ok_or_else(|| GithubError::new("viewer response had no login"))
     }
 }
 
@@ -384,7 +506,31 @@ fn remote_pull(node: PullNode) -> Result<RemotePull, GithubError> {
             .unwrap_or(0),
         required_approvals: required_approvals(node.base_ref.as_ref(), node.review_decision.as_deref()),
         has_conflicts: node.mergeable.as_deref() == Some("CONFLICTING"),
+        branch: node.head_ref_name,
     })
+}
+
+fn parse_mutation(body: &str) -> Result<(), GithubError> {
+    #[derive(Deserialize)]
+    struct Response {
+        errors: Option<Vec<GraphqlError>>,
+        message: Option<String>,
+    }
+    let parsed: Response = serde_json::from_str(body)
+        .map_err(|error| GithubError::new(format!("invalid mutation response: {error}")))?;
+    if let Some(message) = parsed.message.filter(|message| !message.is_empty()) {
+        return Err(GithubError::new(message));
+    }
+    if let Some(errors) = parsed.errors.filter(|errors| !errors.is_empty()) {
+        return Err(GithubError::new(
+            errors
+                .into_iter()
+                .map(|error| error.message)
+                .collect::<Vec<_>>()
+                .join("; "),
+        ));
+    }
+    Ok(())
 }
 
 fn ci_status(state: Option<&str>) -> String {
@@ -480,6 +626,8 @@ struct PullNode {
     url: String,
     #[serde(rename = "updatedAt")]
     updated_at: String,
+    #[serde(default, rename = "headRefName")]
+    head_ref_name: String,
     #[serde(default)]
     author: Option<AuthorNode>,
     #[serde(default)]
@@ -603,6 +751,24 @@ impl Http for ReqwestHttp {
         }
         Ok(text)
     }
+
+    fn get_bearer(&self, url: &str, token: &str) -> Result<(u16, String), GithubError> {
+        let response = reqwest::blocking::Client::new()
+            .get(url)
+            .header("Accept", "application/vnd.github+json")
+            .header("Authorization", format!("Bearer {token}"))
+            .header("User-Agent", "angry-hub")
+            .send()
+            .map_err(|error| GithubError::new(format!("request failed: {error}")))?;
+        let status = response.status().as_u16();
+        let text = response
+            .text()
+            .map_err(|error| GithubError::new(format!("failed to read response: {error}")))?;
+        if status >= 400 && status != 403 {
+            return Err(GithubError::new(format!("request failed ({status}): {text}")));
+        }
+        Ok((status, text))
+    }
 }
 
 #[cfg(test)]
@@ -634,6 +800,11 @@ mod tests {
 
         fn post_bearer(&self, url: &str, _token: &str, body: &str) -> Result<String, GithubError> {
             self.post_json(url, body)
+        }
+
+        fn get_bearer(&self, url: &str, _token: &str) -> Result<(u16, String), GithubError> {
+            *self.url.lock().unwrap() = url.into();
+            Ok((200, self.response.clone()))
         }
     }
 

@@ -56,6 +56,7 @@ fn into_pull(pull: RemotePull) -> PullRequest {
         approvals: pull.approvals,
         required_approvals: pull.required_approvals,
         has_conflicts: pull.has_conflicts,
+        branch: pull.branch,
     }
 }
 
@@ -113,6 +114,15 @@ mod tests {
             self.queries.lock().unwrap().push(query.into());
             Ok(self.pages.lock().unwrap().remove(0))
         }
+        fn close_pull_request(&self, _: &str, _: &str) -> Result<(), GithubError> {
+            Ok(())
+        }
+        fn set_pull_request_draft(&self, _: &str, _: &str, _: bool) -> Result<(), GithubError> {
+            Ok(())
+        }
+        fn oauth_app_restricted(&self, _: &str, _: &str) -> Result<bool, GithubError> {
+            Ok(false)
+        }
     }
 
     fn remote(id: &str, state: &str) -> RemotePull {
@@ -129,6 +139,7 @@ mod tests {
             approvals: 0,
             required_approvals: 0,
             has_conflicts: false,
+            branch: "feature".into(),
         }
     }
 
@@ -165,6 +176,11 @@ mod tests {
         std::fs::write(
             dir.join("001.sql"),
             include_str!("../migrations/001_pull_requests.sql"),
+        )
+        .unwrap();
+        std::fs::write(
+            dir.join("002.sql"),
+            include_str!("../migrations/002_branch.sql"),
         )
         .unwrap();
         let mut store = homestead::Store::open(&dir.join("db"), &dir, crate::pulls::PullMutator)

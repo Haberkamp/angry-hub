@@ -22,6 +22,7 @@ pub struct PullRequest {
     pub approvals: i64,
     pub required_approvals: i64,
     pub has_conflicts: bool,
+    pub branch: String,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Table)]
@@ -201,6 +202,7 @@ mod tests {
             approvals: 0,
             required_approvals: 0,
             has_conflicts: false,
+            branch: "feature".into(),
         }
     }
 
