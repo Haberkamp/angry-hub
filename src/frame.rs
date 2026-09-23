@@ -1,6 +1,4 @@
-use gpui::{
-    App, Bounds, Context, DisplayId, Global, Pixels, Size, Window, point, px, size,
-};
+use gpui::{App, Bounds, Context, DisplayId, Global, Pixels, Size, Window, point, px, size};
 use serde::{Deserialize, Serialize};
 
 pub struct Placement {
@@ -177,7 +175,11 @@ impl WindowFrames {
             width: frame.width,
             height: frame.height,
         };
-        let Some(window) = self.windows.iter_mut().find(|window| window.id == window_id) else {
+        let Some(window) = self
+            .windows
+            .iter_mut()
+            .find(|window| window.id == window_id)
+        else {
             self.windows.push(SavedWindow {
                 id: window_id,
                 home_screen: screen_id.to_string(),
@@ -241,7 +243,9 @@ impl WindowFrames {
 
 impl SavedWindow {
     fn frame_on(&self, screen_id: &str) -> Option<&SavedFrame> {
-        self.frames.iter().find(|frame| frame.screen_id == screen_id)
+        self.frames
+            .iter()
+            .find(|frame| frame.screen_id == screen_id)
     }
 }
 
