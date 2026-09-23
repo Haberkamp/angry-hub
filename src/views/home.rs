@@ -643,9 +643,16 @@ impl Render for Home {
             )
             .child(if empty {
                 div()
+                    .w_full()
                     .px(px(24.))
-                    .text_color(rgb(0x6E6E6E))
-                    .child("No pull requests yet")
+                    .child(
+                        div()
+                            .w_full()
+                            .max_w(px(560.))
+                            .mx_auto()
+                            .text_color(rgb(0x6E6E6E))
+                            .child("No pull requests yet"),
+                    )
                     .into_any_element()
             } else {
                 v_virtual_list(
