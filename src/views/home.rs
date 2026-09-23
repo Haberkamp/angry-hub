@@ -107,12 +107,19 @@ impl Home {
                     let applied = this.update(cx, |this, cx| {
                         match fetched {
                             Ok(fetched) => {
-                                if let Err(error) = sync::apply(
+                                match sync::apply(
                                     &mut this.store,
                                     &fetched.pulls,
                                     fetched.complete,
                                 ) {
-                                    eprintln!("failed to store pull requests: {error}");
+                                    Ok(merged) => {
+                                        for pull in merged {
+                                            sync::notify_merged(&pull);
+                                        }
+                                    }
+                                    Err(error) => {
+                                        eprintln!("failed to store pull requests: {error}");
+                                    }
                                 }
                                 cx.notify();
                             }

@@ -32,6 +32,7 @@ serde_json = "1"
 dirs = "5"
 reqwest = { version = "0.12", default-features = false, features = ["blocking", "json", "rustls-tls"] }
 homestead = "0.1.2"
+notify-rust = "4"
 
 [target.'cfg(target_os = "macos")'.dependencies]
 apple-native-keyring-store = { version = "1", default-features = false, features = ["keychain"] }

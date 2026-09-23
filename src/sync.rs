@@ -60,11 +60,13 @@ fn into_pull(pull: RemotePull) -> PullRequest {
     }
 }
 
+/// Applies a fetched page. On a later sync (a watermark already exists), returns
+/// pull requests that just transitioned to merged so the caller can notify.
 pub fn apply(
     store: &mut homestead::Store<Event>,
     remote: &[PullRequest],
     complete: bool,
-) -> homestead::Result<()> {
+) -> homestead::Result<Vec<PullRequest>> {
     let watermark = store
         .watch(SyncState::where_eq("id", SYNC_ROW))?
         .rows()
@@ -72,6 +74,11 @@ pub fn apply(
         .next()
         .map(|state| state.watermark);
     let local = store.watch(PullRequest::query())?.rows();
+    let announced = if watermark.is_some() {
+        newly_merged(&local, remote)
+    } else {
+        Vec::new()
+    };
     let mut events = pulls::changeset(&local, remote);
     let next = pulls::next_watermark(watermark.as_deref(), remote, complete);
     if watermark.as_deref() != Some(next.as_str()) {
@@ -80,7 +87,32 @@ pub fn apply(
     for event in events {
         store.commit(event)?;
     }
-    Ok(())
+    Ok(announced)
+}
+
+/// Local row was not merged, and this watermark page says it is now.
+fn newly_merged(local: &[PullRequest], remote: &[PullRequest]) -> Vec<PullRequest> {
+    remote
+        .iter()
+        .filter(|pr| pr.state == "merged")
+        .filter(|pr| {
+            local
+                .iter()
+                .any(|row| row.id == pr.id && row.state != "merged")
+        })
+        .cloned()
+        .collect()
+}
+
+pub fn notify_merged(pull: &PullRequest) {
+    let body = format!("{} #{} {}", pull.repository, pull.number, pull.title);
+    if let Err(error) = notify_rust::Notification::new()
+        .summary("Pull request merged")
+        .body(&body)
+        .show()
+    {
+        eprintln!("failed to notify about merged pull request: {error}");
+    }
 }
 
 #[cfg(test)]
@@ -187,11 +219,15 @@ mod tests {
             .unwrap();
 
         let open = into_pull(remote("1", "open"));
-        apply(&mut store, &[open.clone()], true).unwrap();
+        let first = apply(&mut store, &[open.clone()], true).unwrap();
+        assert!(first.is_empty());
         let mut merged = open.clone();
         merged.state = "merged".into();
         merged.updated_at = "2024-02-01T00:00:00Z".into();
-        apply(&mut store, &[merged], true).unwrap();
+        let announced = apply(&mut store, &[merged.clone()], true).unwrap();
+        assert_eq!(announced, vec![merged.clone()]);
+        let again = apply(&mut store, &[merged], true).unwrap();
+        assert!(again.is_empty());
 
         let rows = store.watch(PullRequest::query()).unwrap().rows();
         assert_eq!(rows.len(), 1);
