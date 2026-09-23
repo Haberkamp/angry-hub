@@ -47,6 +47,54 @@ bundle:
 setup-notary:
     xcrun notarytool store-credentials {{notary_profile}} --team-id 7SG72YY7UD
 
+# Bundle, Developer ID sign, notarize, and staple a local .app. Does not publish.
+sign:
+    #!/usr/bin/env bash
+    set -euo pipefail
+
+    if [[ "$(uname -s)" != "Darwin" ]]; then
+        echo "error: signing must run on macOS" >&2
+        exit 1
+    fi
+    if ! security find-identity -v -p codesigning | grep -F "{{codesign_identity}}" >/dev/null; then
+        echo "error: missing signing identity: {{codesign_identity}}" >&2
+        exit 1
+    fi
+    if ! xcrun notarytool history --keychain-profile "{{notary_profile}}" >/dev/null 2>&1; then
+        echo "error: notarytool profile '{{notary_profile}}' is missing. Run: just setup-notary" >&2
+        exit 1
+    fi
+
+    just bundle
+
+    app="target/release/bundle/osx/{{app_name}}.app"
+    bin="$app/Contents/MacOS/angry-hub"
+    zip="/tmp/angry-hub-notarize.zip"
+
+    if [[ ! -d "$app" ]]; then
+        echo "error: expected bundle at $app" >&2
+        exit 1
+    fi
+
+    codesign --force --timestamp --options runtime \
+        --identifier "{{bundle_identifier}}" \
+        --entitlements "{{entitlements}}" \
+        --sign "{{codesign_identity}}" \
+        "$bin"
+    codesign --force --timestamp --options runtime \
+        --entitlements "{{entitlements}}" \
+        --sign "{{codesign_identity}}" \
+        "$app"
+    codesign --verify --strict --verbose=2 "$app"
+
+    rm -f "$zip"
+    ditto -c -k --keepParent "$app" "$zip"
+    xcrun notarytool submit "$zip" --keychain-profile "{{notary_profile}}" --wait
+    xcrun stapler staple "$app"
+    rm -f "$zip"
+
+    echo "Signed and notarized $app"
+
 # Bump Cargo version, build/sign/notarize the .app, then publish a GitHub Release.
 release version: (_assert_release_allowed)
     #!/usr/bin/env bash
