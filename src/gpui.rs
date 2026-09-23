@@ -1,7 +1,7 @@
 use gpui::prelude::*;
 use gpui::{
-    Context, Entity, IntoElement, Pixels, Render, Size, TitlebarOptions, Window, WindowBounds,
-    WindowOptions, div, point, px, rgb, size,
+    Context, Entity, FocusHandle, IntoElement, Pixels, Render, Size, TitlebarOptions, Window,
+    WindowBounds, WindowOptions, div, point, px, rgb, size,
 };
 use gpui_base::StyledExt as _;
 
@@ -18,6 +18,7 @@ mod pulls;
 mod sync;
 mod toast;
 mod keychain;
+mod menu;
 mod session;
 mod tooltip;
 mod views;
@@ -34,6 +35,7 @@ enum Page {
 }
 
 struct Root {
+    focus_handle: FocusHandle,
     chrome: Entity<Chrome>,
     page: Page,
     _logged_in: Option<gpui::Subscription>,
@@ -42,9 +44,12 @@ struct Root {
 impl Root {
     fn new(window_id: u64, window: &mut Window, cx: &mut Context<Self>) -> Self {
         frame::observe(window_id, window, cx);
+        let focus_handle = cx.focus_handle();
+        focus_handle.focus(window, cx);
         let chrome = cx.new(|_| Chrome::new(DEFAULT_WINDOW_SIZE));
         if auth::Auth::load(&keychain::CredentialStore).check() {
             let mut root = Self {
+                focus_handle,
                 chrome,
                 page: Page::Home(cx.new(|cx| Home::new(cx))),
                 _logged_in: None,
@@ -54,12 +59,55 @@ impl Root {
         }
 
         let mut root = Self {
+            focus_handle,
             chrome,
             page: Page::Login(cx.new(|_| Login::new())),
             _logged_in: None,
         };
         root.watch_page(cx);
         root
+    }
+
+    fn quit(&mut self, _: &menu::Quit, _: &mut Window, cx: &mut Context<Self>) {
+        cx.quit();
+    }
+
+    fn hide_app(&mut self, _: &menu::HideApp, _: &mut Window, cx: &mut Context<Self>) {
+        cx.hide();
+    }
+
+    fn hide_others(&mut self, _: &menu::HideOthers, _: &mut Window, cx: &mut Context<Self>) {
+        cx.hide_other_apps();
+    }
+
+    fn show_all(&mut self, _: &menu::ShowAll, _: &mut Window, cx: &mut Context<Self>) {
+        cx.unhide_other_apps();
+    }
+
+    fn close_window(&mut self, _: &menu::CloseWindow, window: &mut Window, _: &mut Context<Self>) {
+        window.remove_window();
+    }
+
+    fn minimize_window(
+        &mut self,
+        _: &menu::MinimizeWindow,
+        window: &mut Window,
+        _: &mut Context<Self>,
+    ) {
+        window.minimize_window();
+    }
+
+    fn zoom_window(&mut self, _: &menu::ZoomWindow, window: &mut Window, _: &mut Context<Self>) {
+        window.zoom_window();
+    }
+
+    fn toggle_full_screen(
+        &mut self,
+        _: &menu::ToggleFullScreen,
+        window: &mut Window,
+        _: &mut Context<Self>,
+    ) {
+        window.toggle_fullscreen();
     }
 
     fn watch_page(&mut self, cx: &mut Context<Self>) {
@@ -88,6 +136,16 @@ impl Render for Root {
             ),
         };
         div()
+            .id("root")
+            .track_focus(&self.focus_handle)
+            .on_action(cx.listener(Self::quit))
+            .on_action(cx.listener(Self::hide_app))
+            .on_action(cx.listener(Self::hide_others))
+            .on_action(cx.listener(Self::show_all))
+            .on_action(cx.listener(Self::close_window))
+            .on_action(cx.listener(Self::minimize_window))
+            .on_action(cx.listener(Self::zoom_window))
+            .on_action(cx.listener(Self::toggle_full_screen))
             .relative()
             .v_flex()
             .size_full()
@@ -132,6 +190,7 @@ fn main() {
     });
     app.run(|cx| {
         gpui_base::init(cx);
+        menu::init(cx);
         open_window(cx);
     });
 }
