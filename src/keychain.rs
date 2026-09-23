@@ -117,7 +117,8 @@ impl SecretStore for CredentialStore {
         if let Some(parent) = path.parent() {
             std::fs::create_dir_all(parent).map_err(|error| error.to_string())?;
         }
-        std::fs::write(&path, secret).map_err(|error| format!("could not save session: {error}"))?;
+        std::fs::write(&path, secret)
+            .map_err(|error| format!("could not save session: {error}"))?;
         #[cfg(unix)]
         {
             use std::os::unix::fs::PermissionsExt;

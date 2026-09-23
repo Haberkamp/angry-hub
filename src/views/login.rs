@@ -256,79 +256,77 @@ impl Render for Login {
                         .v_flex()
                         .gap(px(24.))
                         .items_center()
-                        .child(
-                            Tooltip::new("otp-tooltip", tooltip).child({
-                                let code = code.clone();
-                                let shown = code.clone();
-                                div()
-                                    .id("otp-code")
-                                    .relative()
-                                    .px_3()
-                                    .py_1()
-                                    .rounded_md()
-                                    .text_3xl()
-                                    .font_weight(FontWeight::SEMIBOLD)
-                                    .hover(|style| style.bg(rgb(0x222222)))
-                                    .on_click(cx.listener(move |this, _, _, cx| {
-                                        this.copy_otp(&code, cx);
-                                    }))
-                                    .when(transition == 0, |code| code.child(shown.clone()))
-                                    .when(transition > 0, |code| {
-                                        code.child(div().invisible().child(shown.clone()))
-                                    })
-                                    .when(transition > 0 && (copied || enter_ready), |code| {
-                                        code.child(otp_layer(
-                                            if copied {
-                                                ("otp-code-exit", transition)
-                                            } else {
-                                                ("otp-code", transition)
-                                            },
-                                            !copied,
-                                            true,
-                                            move || div().child(shown.clone()),
-                                        ))
-                                    })
-                                    .when(transition > 0 && (!copied || enter_ready), |code| {
-                                        code.child(otp_layer(
-                                            if copied {
-                                                ("otp-check", transition)
-                                            } else {
-                                                ("otp-check-exit", transition)
-                                            },
-                                            copied,
-                                            true,
-                                            || {
-                                                div().child(
-                                                    svg()
-                                                        .data(icon::CHECK)
-                                                        .size(px(28.))
-                                                        .text_color(rgb(0xffffff)),
-                                                )
-                                            },
-                                        ))
-                                    })
-                            }),
-                        )
+                        .child(Tooltip::new("otp-tooltip", tooltip).child({
+                            let code = code.clone();
+                            let shown = code.clone();
+                            div()
+                                .id("otp-code")
+                                .relative()
+                                .px_3()
+                                .py_1()
+                                .rounded_md()
+                                .text_3xl()
+                                .font_weight(FontWeight::SEMIBOLD)
+                                .hover(|style| style.bg(rgb(0x222222)))
+                                .on_click(cx.listener(move |this, _, _, cx| {
+                                    this.copy_otp(&code, cx);
+                                }))
+                                .when(transition == 0, |code| code.child(shown.clone()))
+                                .when(transition > 0, |code| {
+                                    code.child(div().invisible().child(shown.clone()))
+                                })
+                                .when(transition > 0 && (copied || enter_ready), |code| {
+                                    code.child(otp_layer(
+                                        if copied {
+                                            ("otp-code-exit", transition)
+                                        } else {
+                                            ("otp-code", transition)
+                                        },
+                                        !copied,
+                                        true,
+                                        move || div().child(shown.clone()),
+                                    ))
+                                })
+                                .when(transition > 0 && (!copied || enter_ready), |code| {
+                                    code.child(otp_layer(
+                                        if copied {
+                                            ("otp-check", transition)
+                                        } else {
+                                            ("otp-check-exit", transition)
+                                        },
+                                        copied,
+                                        true,
+                                        || {
+                                            div().child(
+                                                svg()
+                                                    .data(icon::CHECK)
+                                                    .size(px(28.))
+                                                    .text_color(rgb(0xffffff)),
+                                            )
+                                        },
+                                    ))
+                                })
+                        }))
                         .child(
                             div()
                                 .w_full()
                                 .v_flex()
                                 .gap_2()
                                 .child(
-                            Button::primary("open-github")
-                                .full()
-                                .label("Open GitHub")
-                                .on_click(move |_, _, cx| {
-                                    cx.open_url(&verification_uri);
-                                }),
-                        )
-                        .child(
-                            Button::secondary("back")
-                                .full()
-                                .label("Back")
-                                .icon(icon::CHEVRON_LEFT)
-                                .on_click(cx.listener(|this, _, _, cx| this.back(cx))),
-                        ),
+                                    Button::primary("open-github")
+                                        .full()
+                                        .label("Open GitHub")
+                                        .on_click(move |_, _, cx| {
+                                            cx.open_url(&verification_uri);
+                                        }),
+                                )
+                                .child(
+                                    Button::secondary("back")
+                                        .full()
+                                        .label("Back")
+                                        .icon(icon::CHEVRON_LEFT)
+                                        .on_click(cx.listener(|this, _, _, cx| this.back(cx))),
+                                ),
                         ),
                 )
             }
@@ -351,14 +349,17 @@ fn otp_layer(
     if replay {
         animation = animation.from(if visible { -1.0 } else { 0.0 });
     }
-    div().absolute().inset_0().with_spring(id, animation, move |layer, phase| {
-        let shift = phase.clamp(-1.0, 1.0);
-        let amount = ((shift.abs() - 0.04) / 0.96).clamp(0.0, 1.0);
-        layer
-            .top(px(-shift * OTP_TRAVEL))
-            .opacity(1.0 - amount)
-            .child(blurred(amount * OTP_BLUR, &render))
-    })
+    div()
+        .absolute()
+        .inset_0()
+        .with_spring(id, animation, move |layer, phase| {
+            let shift = phase.clamp(-1.0, 1.0);
+            let amount = ((shift.abs() - 0.04) / 0.96).clamp(0.0, 1.0);
+            layer
+                .top(px(-shift * OTP_TRAVEL))
+                .opacity(1.0 - amount)
+                .child(blurred(amount * OTP_BLUR, &render))
+        })
 }
 
 fn blurred(radius: f32, render: &impl Fn() -> gpui::Div) -> gpui::Div {

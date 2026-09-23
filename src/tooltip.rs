@@ -162,10 +162,8 @@ impl Element for Tooltip {
 }
 
 fn bubble(host_id: SharedString, label: SharedString, open: bool) -> AnyElement {
-    let animation_id = SharedString::from(format!(
-        "{host_id}-{}",
-        if open { "enter" } else { "exit" }
-    ));
+    let animation_id =
+        SharedString::from(format!("{host_id}-{}", if open { "enter" } else { "exit" }));
     div()
         .absolute()
         .bottom_full()
