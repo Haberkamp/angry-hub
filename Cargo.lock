@@ -155,9 +155,12 @@ dependencies = [
 name = "angry-hub"
 version = "2.0.0"
 dependencies = [
+ "dirs",
  "gpui-base",
  "gpui-pre",
  "gpui-pre-platform",
+ "serde",
+ "serde_json",
 ]
 
 [[package]]
