@@ -43,9 +43,7 @@ pub struct Home {
 impl Home {
     pub fn new(cx: &mut Context<Self>) -> Self {
         let mut store = pulls::open().expect("open homestead");
-        let pulls = store
-            .watch(PullRequest::query().order_by_desc("updated_at"))
-            .expect("watch pull requests");
+        let pulls = store.watch(pulls::visible()).expect("watch pull requests");
         let home = Self {
             store,
             pulls,
@@ -53,7 +51,33 @@ impl Home {
             scroll: VirtualListScrollHandle::new(),
         };
         home.start_sync(cx);
+        home.age_merged(cx);
         home
+    }
+
+    /// Re-run the visible query so a merged pull request drops off five minutes
+    /// after it landed, even when sync has nothing new to write.
+    fn age_merged(&self, cx: &mut Context<Self>) {
+        cx.spawn(async move |this, cx| {
+            loop {
+                cx.background_executor()
+                    .timer(Duration::from_secs(30))
+                    .await;
+                let refreshed = this.update(cx, |this, cx| {
+                    match this.store.watch(pulls::visible()) {
+                        Ok(pulls) => {
+                            this.pulls = pulls;
+                            cx.notify();
+                        }
+                        Err(error) => eprintln!("failed to refresh pull requests: {error}"),
+                    }
+                });
+                if refreshed.is_err() {
+                    break;
+                }
+            }
+        })
+        .detach();
     }
 
     fn start_sync(&self, cx: &mut Context<Self>) {
@@ -174,23 +198,6 @@ pub fn logout_button(home: Entity<Home>) -> impl IntoElement {
                 .text_color(rgb(0x6E6E6E))
                 .group_hover("logout", |style| style.text_color(rgb(0xffffff))),
         )
-}
-
-fn grouped(mut pulls: Vec<PullRequest>) -> Vec<PullRequest> {
-    pulls.sort_by(|left, right| {
-        group_rank(&left.state)
-            .cmp(&group_rank(&right.state))
-            .then_with(|| right.updated_at.cmp(&left.updated_at))
-    });
-    pulls
-}
-
-fn group_rank(state: &str) -> u8 {
-    match state {
-        "open" => 0,
-        "draft" => 1,
-        _ => 2,
-    }
 }
 
 fn status_icon(state: &str) -> &'static [u8] {
@@ -321,7 +328,7 @@ fn pull_row(pull: PullRequest, cx: &App) -> impl IntoElement {
 
 impl Render for Home {
     fn render(&mut self, _: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
-        self.rows = grouped(self.pulls.rows());
+        self.rows = self.pulls.rows();
         let empty = self.rows.is_empty();
         let count = self.rows.len();
         let sizes = Rc::new(vec![size(px(560.), px(ROW_HEIGHT)); count]);

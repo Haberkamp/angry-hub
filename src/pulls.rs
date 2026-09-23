@@ -122,6 +122,21 @@ fn classify(previous: Option<&PullRequest>, next: &PullRequest) -> Option<Event>
     }
 }
 
+/// Home list: open and draft pull requests, plus anything merged in the last
+/// five minutes. Merged, then open, then draft; newest update first inside
+/// each group. `updated_at` is compared in SQLite so the window moves on
+/// every refresh of this query.
+pub fn visible() -> homestead::Select<PullRequest> {
+    PullRequest::query()
+        .where_raw(
+            "\"state\" IN ('open', 'draft') OR (\"state\" = 'merged' AND \"updated_at\" >= strftime('%Y-%m-%dT%H:%M:%SZ', 'now', '-5 minutes'))",
+            std::iter::empty::<&str>(),
+        )
+        .order_by_raw(
+            "CASE \"state\" WHEN 'merged' THEN 0 WHEN 'open' THEN 1 WHEN 'draft' THEN 2 ELSE 3 END, \"updated_at\" DESC",
+        )
+}
+
 /// Initial sync runs only when no watermark has been stored.
 pub fn search_query(watermark: Option<&str>) -> String {
     match watermark {
@@ -151,6 +166,27 @@ pub fn next_watermark(previous: Option<&str>, remote: &[PullRequest], complete: 
 mod tests {
     use super::*;
 
+    fn rfc3339(unix: i64) -> String {
+        let days = unix.div_euclid(86_400);
+        let secs = unix.rem_euclid(86_400);
+        let z = days + 719_468;
+        let era = z.div_euclid(146_097);
+        let doe = z.rem_euclid(146_097);
+        let yoe = (doe - doe / 1_460 + doe / 36_524 - doe / 146_096) / 365;
+        let mut y = yoe + era * 400;
+        let doy = doe - (365 * yoe + yoe / 4 - yoe / 100);
+        let mp = (5 * doy + 2) / 153;
+        let d = doy - (153 * mp + 2) / 5 + 1;
+        let m = mp + if mp < 10 { 3 } else { -9 };
+        if m <= 2 {
+            y += 1;
+        }
+        let h = secs / 3_600;
+        let min = (secs % 3_600) / 60;
+        let s = secs % 60;
+        format!("{y:04}-{m:02}-{d:02}T{h:02}:{min:02}:{s:02}Z")
+    }
+
     fn pr(id: &str, state: &str, updated_at: &str) -> PullRequest {
         PullRequest {
             id: id.into(),
@@ -166,6 +202,35 @@ mod tests {
             required_approvals: 0,
             has_conflicts: false,
         }
+    }
+
+    #[test]
+    fn visible_query_keeps_open_draft_and_recently_merged() {
+        let dir = std::env::temp_dir().join(format!(
+            "angry-hub-visible-{}",
+            std::process::id()
+        ));
+        let _ = fs::remove_dir_all(&dir);
+        fs::create_dir_all(&dir).unwrap();
+        let mut store = Store::open(dir.join("db"), migrations_dir(), PullMutator).unwrap();
+        let now = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_secs() as i64;
+        for row in [
+            pr("open", "open", &rfc3339(now - 3_600)),
+            pr("draft", "draft", &rfc3339(now - 7_200)),
+            pr("just-merged", "merged", &rfc3339(now - 30)),
+            pr("old-merged", "merged", &rfc3339(now - 600)),
+            pr("closed", "closed", &rfc3339(now - 10)),
+        ] {
+            store.commit(Event::PrOpened(row)).unwrap();
+        }
+
+        let rows = store.watch(visible()).unwrap().rows();
+        let ids: Vec<_> = rows.iter().map(|row| row.id.as_str()).collect();
+        assert_eq!(ids, vec!["just-merged", "open", "draft"]);
+        let _ = fs::remove_dir_all(&dir);
     }
 
     #[test]
