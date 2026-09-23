@@ -111,6 +111,12 @@ impl Root {
         window.toggle_fullscreen();
     }
 
+    fn sync_now(&mut self, _: &menu::SyncNow, _: &mut Window, cx: &mut Context<Self>) {
+        if let Page::Home(home) = &self.page {
+            home.update(cx, |home, cx| home.manual_sync(cx));
+        }
+    }
+
     fn watch_page(&mut self, cx: &mut Context<Self>) {
         self._logged_in = Some(match &self.page {
             Page::Login(login) => cx.subscribe(login, |this, _, _: &LoggedIn, cx| {
@@ -133,7 +139,7 @@ impl Render for Root {
             Page::Login(login) => (login.clone().into_any_element(), None),
             Page::Home(home) => (
                 home.clone().into_any_element(),
-                Some(logout_button(home.clone())),
+                Some(logout_button(home.clone(), cx)),
             ),
         };
         div()
@@ -147,6 +153,7 @@ impl Render for Root {
             .on_action(cx.listener(Self::minimize_window))
             .on_action(cx.listener(Self::zoom_window))
             .on_action(cx.listener(Self::toggle_full_screen))
+            .on_action(cx.listener(Self::sync_now))
             .relative()
             .v_flex()
             .size_full()

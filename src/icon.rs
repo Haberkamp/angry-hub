@@ -8,5 +8,6 @@ pub const PENDING: &[u8] = include_bytes!("../assets/icons/pending.svg");
 pub const PR_CLOSED: &[u8] = include_bytes!("../assets/icons/pr_closed.svg");
 pub const PR_DRAFT: &[u8] = include_bytes!("../assets/icons/pr_draft.svg");
 pub const PULL_REQUEST: &[u8] = include_bytes!("../assets/icons/pull_request.svg");
+pub const SPINNER: &[u8] = include_bytes!("../assets/icons/spinner.svg");
 pub const TOOLTIP_ARROW: &[u8] = include_bytes!("../assets/icons/tooltip_arrow.svg");
 pub const X: &[u8] = include_bytes!("../assets/icons/x.svg");

@@ -3,8 +3,9 @@ use std::time::Duration;
 
 use gpui::prelude::*;
 use gpui::{
-    App, ClipboardItem, Context, Entity, EventEmitter, FontWeight, IntoElement, MouseButton,
-    PromptButton, PromptLevel, Render, Transformation, Window, div, point, px, rgb, size, svg,
+    Animation, AnimationExt as _, App, ClipboardItem, Context, Entity, EventEmitter, FontWeight,
+    IntoElement, MouseButton, PromptButton, PromptLevel, Render, Transformation, Window, div,
+    percentage, point, px, rgb, size, svg,
 };
 use gpui_base::StyledExt as _;
 use gpui_base::{VirtualListScrollHandle, v_virtual_list};
@@ -25,6 +26,7 @@ use crate::sync;
 
 const INSET: f32 = 12.;
 const ROW_HEIGHT: f32 = 64.;
+const SPIN: Duration = Duration::from_millis(800);
 
 pub struct LoggedOut;
 
@@ -45,6 +47,7 @@ pub struct Home {
     menu_open: Option<String>,
     menu_skip_exit: bool,
     pending: Option<String>,
+    syncing: bool,
     toaster: Toaster,
 }
 
@@ -60,6 +63,7 @@ impl Home {
             menu_open: None,
             menu_skip_exit: false,
             pending: None,
+            syncing: false,
             toaster: Toaster::default(),
         };
         home.start_sync(cx);
@@ -177,6 +181,71 @@ impl Home {
             },
             initial,
         })
+    }
+
+    pub fn manual_sync(&mut self, cx: &mut Context<Self>) {
+        if self.syncing {
+            return;
+        }
+        let Some(job) = self.sync_job() else {
+            return;
+        };
+        self.syncing = true;
+        cx.notify();
+        crate::log_info!(
+            "sync_started",
+            "initial" => job.initial,
+        );
+        cx.spawn(async move |this, cx| {
+            let started = std::time::Instant::now();
+            let github = GithubClient::new(GITHUB_CLIENT_ID, ReqwestHttp);
+            let fetched = cx
+                .background_executor()
+                .spawn(
+                    async move { sync::fetch_authored(&github, &job.token, &job.query, job.limit) },
+                )
+                .await;
+            let elapsed = started.elapsed().as_millis() as u64;
+            this.update(cx, |this, cx| {
+                this.syncing = false;
+                match fetched {
+                    Ok(fetched) => {
+                        crate::log_info!(
+                            "sync_completed",
+                            "manual" => true,
+                            "count" => fetched.pulls.len(),
+                            "initial" => job.initial,
+                            "complete" => fetched.complete,
+                            "elapsed_ms" => elapsed,
+                        );
+                        match sync::apply(&mut this.store, &fetched.pulls, fetched.complete) {
+                            Ok(merged) => {
+                                for pull in merged {
+                                    sync::notify_merged(&pull);
+                                }
+                            }
+                            Err(error) => {
+                                crate::log_error!(
+                                    "apply_failed",
+                                    "error" => error.to_string()
+                                );
+                            }
+                        }
+                    }
+                    Err(error) => {
+                        crate::log_error!(
+                            "fetch_failed",
+                            "manual" => true,
+                            "error" => error.message(),
+                            "initial" => job.initial,
+                        );
+                    }
+                }
+                cx.notify();
+            })
+            .ok();
+        })
+        .detach();
     }
 
     fn toggle_menu(&mut self, id: &str, cx: &mut Context<Self>) {
@@ -373,49 +442,82 @@ impl Home {
 
 impl EventEmitter<LoggedOut> for Home {}
 
-pub fn logout_button(home: Entity<Home>) -> impl IntoElement {
+fn sync_spinner() -> impl IntoElement {
+    svg()
+        .data(icon::SPINNER)
+        .size(px(16.))
+        .flex_none()
+        .text_color(rgb(0x6E6E6E))
+        .with_animation(
+            "sync-spinner",
+            Animation::new(SPIN).repeat(),
+            |icon, delta| icon.with_transformation(Transformation::rotate(percentage(delta))),
+        )
+}
+
+pub fn logout_button(home: Entity<Home>, cx: &App) -> impl IntoElement {
+    let syncing = home.read(cx).syncing;
     div()
-        .id("logout")
-        .group("logout")
         .absolute()
         .top(px(INSET))
         .right(px(INSET))
-        .size(px(40.))
         .flex()
         .items_center()
-        .justify_center()
-        .rounded_full()
-        .text_color(rgb(0x6E6E6E))
-        .hover(|style| style.bg(rgb(0x222222)).text_color(rgb(0xffffff)))
-        .active(|style| style.bg(rgb(0x313131)))
-        .on_mouse_down(MouseButton::Left, |_, _, cx| {
-            cx.stop_propagation();
-        })
-        .on_click(move |_, window, cx| {
-            let answer = window.prompt(
-                PromptLevel::Warning,
-                "Log out?",
-                Some("Are you sure you want to log out?"),
-                &[PromptButton::ok("Log out"), PromptButton::cancel("Cancel")],
-                cx,
-            );
-            home.update(cx, |_, cx| {
-                cx.spawn_in(window, async move |this, cx| {
-                    if answer.await == Ok(0) {
-                        this.update_in(cx, |this, window, cx| this.logout(window, cx))
-                            .ok();
-                    }
-                })
-                .detach();
-            });
+        .gap(px(4.))
+        .when(syncing, |row| {
+            row.child(
+                div()
+                    .size(px(40.))
+                    .flex()
+                    .items_center()
+                    .justify_center()
+                    .child(sync_spinner()),
+            )
         })
         .child(
-            svg()
-                .data(icon::LOGOUT)
-                .size(px(16.))
-                .with_transformation(Transformation::translate(point(px(-1.), px(0.))))
+            div()
+                .id("logout")
+                .group("logout")
+                .size(px(40.))
+                .flex()
+                .items_center()
+                .justify_center()
+                .rounded_full()
                 .text_color(rgb(0x6E6E6E))
-                .group_hover("logout", |style| style.text_color(rgb(0xffffff))),
+                .hover(|style| style.bg(rgb(0x222222)).text_color(rgb(0xffffff)))
+                .active(|style| style.bg(rgb(0x313131)))
+                .on_mouse_down(MouseButton::Left, |_, _, cx| {
+                    cx.stop_propagation();
+                })
+                .on_click({
+                    let home = home.clone();
+                    move |_, window, cx| {
+                        let answer = window.prompt(
+                            PromptLevel::Warning,
+                            "Log out?",
+                            Some("Are you sure you want to log out?"),
+                            &[PromptButton::ok("Log out"), PromptButton::cancel("Cancel")],
+                            cx,
+                        );
+                        home.update(cx, |_, cx| {
+                            cx.spawn_in(window, async move |this, cx| {
+                                if answer.await == Ok(0) {
+                                    this.update_in(cx, |this, window, cx| this.logout(window, cx))
+                                        .ok();
+                                }
+                            })
+                            .detach();
+                        });
+                    }
+                })
+                .child(
+                    svg()
+                        .data(icon::LOGOUT)
+                        .size(px(16.))
+                        .with_transformation(Transformation::translate(point(px(-1.), px(0.))))
+                        .text_color(rgb(0x6E6E6E))
+                        .group_hover("logout", |style| style.text_color(rgb(0xffffff))),
+                ),
         )
 }
 

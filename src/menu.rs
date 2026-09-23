@@ -13,6 +13,7 @@ actions!(
         MinimizeWindow,
         ZoomWindow,
         ToggleFullScreen,
+        SyncNow,
         Copy,
         Cut,
         Paste,
@@ -30,6 +31,7 @@ pub fn init(cx: &mut App) {
         KeyBinding::new("cmd-w", CloseWindow, None),
         KeyBinding::new("cmd-m", MinimizeWindow, None),
         KeyBinding::new("ctrl-cmd-f", ToggleFullScreen, None),
+        KeyBinding::new("cmd-r", SyncNow, None),
     ]);
     cx.set_menus(menus());
     cx.activate(true);
@@ -55,7 +57,11 @@ fn menus() -> [Menu; 4] {
             MenuItem::os_action("Paste", Paste, OsAction::Paste),
             MenuItem::os_action("Select All", SelectAll, OsAction::SelectAll),
         ]),
-        Menu::new("View").items([MenuItem::action("Enter Full Screen", ToggleFullScreen)]),
+        Menu::new("View").items([
+            MenuItem::action("Sync Now", SyncNow),
+            MenuItem::separator(),
+            MenuItem::action("Enter Full Screen", ToggleFullScreen),
+        ]),
         Menu::new("Window").items([
             MenuItem::action("Minimize", MinimizeWindow),
             MenuItem::action("Zoom", ZoomWindow),
