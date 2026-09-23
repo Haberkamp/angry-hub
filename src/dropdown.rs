@@ -5,7 +5,7 @@ use std::time::{Duration, Instant};
 
 use gpui::prelude::*;
 use gpui::{
-    Animation, AnimationExt as _, Anchor, App, Bounds, IntoElement, MouseButton, Pixels,
+    Anchor, Animation, AnimationExt as _, App, Bounds, IntoElement, MouseButton, Pixels,
     RenderOnce, SharedString, Window, div, ease_out_quint, px, rgb, svg,
 };
 use gpui_base::{ElementExt as _, Popup};
@@ -151,7 +151,8 @@ impl RenderOnce for Dropdown {
             .when(open, |this| this.bg(rgb(0x313131)))
             .hover(|this| this.bg(rgb(0x313131)))
             .when(!open, |this| {
-                this.opacity(0.).group_hover("pr-row", |style| style.opacity(1.))
+                this.opacity(0.)
+                    .group_hover("pr-row", |style| style.opacity(1.))
             })
             .on_prepaint({
                 let trigger_bounds = trigger_bounds.clone();
@@ -208,7 +209,11 @@ impl RenderOnce for Dropdown {
                     .items_center()
                     .text_size(px(13.))
                     .whitespace_nowrap()
-                    .text_color(if disabled { rgb(0x6E6E6E) } else { rgb(0xFFFFFF) })
+                    .text_color(if disabled {
+                        rgb(0x6E6E6E)
+                    } else {
+                        rgb(0xFFFFFF)
+                    })
                     .when(!disabled, |row| {
                         row.hover(|row| row.bg(rgb(0x313131))).when_some(
                             on_select.clone(),
@@ -236,6 +241,8 @@ impl RenderOnce for Dropdown {
         Popup::new(self.id, trigger)
             .anchor(Anchor::TopRight)
             .flex_none()
-            .when(visible, |popup| popup.content(div().mt(px(4.)).child(panel)))
+            .when(visible, |popup| {
+                popup.content(div().mt(px(4.)).child(panel))
+            })
     }
 }
