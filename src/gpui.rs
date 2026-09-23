@@ -95,30 +95,39 @@ impl Render for Root {
     }
 }
 
+fn open_window(cx: &mut gpui::App) {
+    let Some(placement) = frame::restore(DEFAULT_WINDOW_SIZE, cx).into_iter().next() else {
+        return;
+    };
+    let window_id = placement.window_id;
+    let options = WindowOptions {
+        window_bounds: Some(WindowBounds::Windowed(placement.bounds)),
+        display_id: placement.display_id,
+        window_min_size: Some(MIN_WINDOW_SIZE),
+        titlebar: Some(TitlebarOptions {
+            appears_transparent: true,
+            traffic_light_position: Some(point(px(12.0), px(16.0))),
+            ..Default::default()
+        }),
+        app_owns_titlebar_drag: true,
+        ..Default::default()
+    };
+    cx.open_window(options, move |window, cx| {
+        cx.new(|cx| Root::new(window_id, window, cx))
+    })
+    .expect("Failed to open window");
+}
+
 fn main() {
     let app = gpui_platform::application();
 
+    app.on_reopen(|cx| {
+        if cx.windows().is_empty() {
+            open_window(cx);
+        }
+    });
     app.run(|cx| {
         gpui_base::init(cx);
-
-        for placement in frame::restore(DEFAULT_WINDOW_SIZE, cx) {
-            let window_id = placement.window_id;
-            let options = WindowOptions {
-                window_bounds: Some(WindowBounds::Windowed(placement.bounds)),
-                display_id: placement.display_id,
-                window_min_size: Some(MIN_WINDOW_SIZE),
-                titlebar: Some(TitlebarOptions {
-                    appears_transparent: true,
-                    traffic_light_position: Some(point(px(12.0), px(16.0))),
-                    ..Default::default()
-                }),
-                app_owns_titlebar_drag: true,
-                ..Default::default()
-            };
-            cx.open_window(options, move |window, cx| {
-                cx.new(|cx| Root::new(window_id, window, cx))
-            })
-            .expect("Failed to open window");
-        }
+        open_window(cx);
     });
 }

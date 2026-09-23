@@ -220,6 +220,7 @@ impl WindowFrames {
 
         self.windows
             .iter()
+            .take(1)
             .map(|window| {
                 if let Some(screen) = connected
                     .iter()
@@ -350,7 +351,7 @@ mod tests {
     }
 
     #[test]
-    fn restores_each_window_on_its_own_screen() {
+    fn restores_only_the_first_window() {
         let mut frames = WindowFrames::default();
         let both = ["laptop".into(), "external".into()];
         frames.remember(
@@ -376,29 +377,18 @@ mod tests {
             &both,
         );
 
-        let mut restored = frames.restore(&[laptop(), external()], (800.0, 600.0));
-        restored.sort_by_key(|window| window.window_id);
+        let restored = frames.restore(&[laptop(), external()], (800.0, 600.0));
 
         assert_eq!(
             restored,
-            vec![
-                RestoredWindow {
-                    window_id: 1,
-                    screen_id: "laptop".into(),
-                    x: 10.0,
-                    y: 20.0,
-                    width: 800.0,
-                    height: 600.0,
-                },
-                RestoredWindow {
-                    window_id: 2,
-                    screen_id: "external".into(),
-                    x: 1470.0,
-                    y: 40.0,
-                    width: 1200.0,
-                    height: 800.0,
-                },
-            ]
+            vec![RestoredWindow {
+                window_id: 1,
+                screen_id: "laptop".into(),
+                x: 10.0,
+                y: 20.0,
+                width: 800.0,
+                height: 600.0,
+            }]
         );
     }
 
