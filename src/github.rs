@@ -4,6 +4,8 @@ use serde::Deserialize;
 
 use crate::session::Tokens;
 
+pub const GITHUB_CLIENT_ID: &str = "Ov23li14mBVzqgdBi3HH";
+
 const DEVICE_CODE_URL: &str = "https://github.com/login/device/code";
 const ACCESS_TOKEN_URL: &str = "https://github.com/login/oauth/access_token";
 const SCOPE: &str = "notifications repo read:user";
@@ -179,7 +181,9 @@ fn parse_token_response(body: &str) -> Result<TokenResponse, GithubError> {
         Some("access_denied") => Ok(TokenResponse::Error(DevicePoll::Denied)),
         Some("expired_token") => Ok(TokenResponse::Error(DevicePoll::Expired)),
         Some(other) => Err(GithubError::new(
-            parsed.error_description.unwrap_or_else(|| other.to_string()),
+            parsed
+                .error_description
+                .unwrap_or_else(|| other.to_string()),
         )),
         None => Err(GithubError::new("token response had no access token")),
     }

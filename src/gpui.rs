@@ -3,69 +3,93 @@ use gpui::{
     Context, Entity, IntoElement, Pixels, Render, Size, TitlebarOptions, Window, WindowBounds,
     WindowOptions, div, point, px, rgb, size,
 };
-use gpui_base::{Button, StyledExt as _};
+use gpui_base::StyledExt as _;
 
 mod auth;
-mod github;
-mod keychain;
-mod session;
+mod button;
 mod chrome;
 mod color;
 mod frame;
+mod github;
+mod icon;
+mod keychain;
+mod session;
+mod tooltip;
+mod views;
 
 use chrome::Chrome;
+use views::{Home, LoggedIn, LoggedOut, Login, logout_button};
 
 const DEFAULT_WINDOW_SIZE: Size<Pixels> = size(px(800.0), px(600.0));
 const MIN_WINDOW_SIZE: Size<Pixels> = size(px(480.0), px(600.0));
 
+enum Page {
+    Login(Entity<Login>),
+    Home(Entity<Home>),
+}
+
 struct Root {
-    count: i32,
     chrome: Entity<Chrome>,
+    page: Page,
+    _logged_in: Option<gpui::Subscription>,
 }
 
 impl Root {
     fn new(window_id: u64, window: &mut Window, cx: &mut Context<Self>) -> Self {
         frame::observe(window_id, window, cx);
-        Self {
-            count: 0,
-            chrome: cx.new(|_| Chrome::new(DEFAULT_WINDOW_SIZE)),
+        let chrome = cx.new(|_| Chrome::new(DEFAULT_WINDOW_SIZE));
+        if auth::Auth::load(&keychain::KeychainStore).check() {
+            let mut root = Self {
+                chrome,
+                page: Page::Home(cx.new(|_| Home)),
+                _logged_in: None,
+            };
+            root.watch_page(cx);
+            return root;
         }
+
+        let mut root = Self {
+            chrome,
+            page: Page::Login(cx.new(|_| Login::new())),
+            _logged_in: None,
+        };
+        root.watch_page(cx);
+        root
+    }
+
+    fn watch_page(&mut self, cx: &mut Context<Self>) {
+        self._logged_in = Some(match &self.page {
+            Page::Login(login) => cx.subscribe(login, |this, _, _: &LoggedIn, cx| {
+                this.page = Page::Home(cx.new(|_| Home));
+                this.watch_page(cx);
+                cx.notify();
+            }),
+            Page::Home(home) => cx.subscribe(home, |this, _, _: &LoggedOut, cx| {
+                this.page = Page::Login(cx.new(|_| Login::new()));
+                this.watch_page(cx);
+                cx.notify();
+            }),
+        });
     }
 }
 
 impl Render for Root {
-    fn render(&mut self, _: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
-        let entity = cx.entity();
-
+    fn render(&mut self, _: &mut Window, _: &mut Context<Self>) -> impl IntoElement {
+        let (page, logout) = match &self.page {
+            Page::Login(login) => (login.clone().into_any_element(), None),
+            Page::Home(home) => (
+                home.clone().into_any_element(),
+                Some(logout_button(home.clone())),
+            ),
+        };
         div()
+            .relative()
             .v_flex()
             .size_full()
             .text_color(rgb(0xffffff))
             .child(self.chrome.clone())
-            .child(
-                div()
-                    .flex_1()
-                    .v_flex()
-                    .gap_2()
-                    .items_center()
-                    .justify_center()
-                    .child(format!("Count: {}", self.count))
-                    .child(
-                        Button::new("increment")
-                            .px_3()
-                            .py_2()
-                            .rounded(px(6.))
-                            .bg(rgb(0x2563eb))
-                            .text_color(rgb(0xffffff))
-                            .on_click(move |_, _, cx| {
-                                entity.update(cx, |this, cx| {
-                                    this.count += 1;
-                                    cx.notify();
-                                });
-                            })
-                            .child("Increment"),
-                    ),
-            )
+            .child(page)
+            .children(logout)
     }
 }
 

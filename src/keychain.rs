@@ -61,9 +61,7 @@ pub fn decode(secret: &str) -> Option<Tokens> {
     }
     Some(Tokens {
         access_token: stored.access_token,
-        refresh_token: stored
-            .refresh_token
-            .filter(|token| !token.is_empty()),
+        refresh_token: stored.refresh_token.filter(|token| !token.is_empty()),
     })
 }
 
