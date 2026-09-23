@@ -65,22 +65,25 @@ pub fn decode(secret: &str) -> Option<Tokens> {
     })
 }
 
-#[cfg(target_os = "macos")]
+#[cfg(all(target_os = "macos", not(debug_assertions)))]
 const KEYCHAIN_ACCOUNT: &str = "github-oauth";
-
-#[cfg(all(target_os = "macos", debug_assertions))]
-const KEYCHAIN_SERVICE: &str = "dev.haberkamp.angryhub.dev";
 
 #[cfg(all(target_os = "macos", not(debug_assertions)))]
 const KEYCHAIN_SERVICE: &str = "dev.haberkamp.angryhub";
 
-/// Login keychain entry. This is the unlocked keychain for the logged-in user,
-/// so reading it does not ask for a password.
-#[cfg(target_os = "macos")]
-pub struct KeychainStore;
+/// Login keychain entry used by release builds. Debug builds keep the session
+/// in a file because each `cargo run` re-signs the binary and Keychain would
+/// prompt again.
+#[cfg(all(target_os = "macos", not(debug_assertions)))]
+pub struct CredentialStore;
 
-#[cfg(target_os = "macos")]
-impl SecretStore for KeychainStore {
+/// Session file for debug builds. Mode `0600` under Application Support, so
+/// `just run` can reload the token without a Keychain prompt.
+#[cfg(all(target_os = "macos", debug_assertions))]
+pub struct CredentialStore;
+
+#[cfg(all(target_os = "macos", not(debug_assertions)))]
+impl SecretStore for CredentialStore {
     fn load(&self) -> Option<String> {
         entry().ok()?.get_password().ok()
     }
@@ -98,7 +101,40 @@ impl SecretStore for KeychainStore {
     }
 }
 
-#[cfg(target_os = "macos")]
+#[cfg(all(target_os = "macos", debug_assertions))]
+fn session_path() -> std::path::PathBuf {
+    dirs::data_dir()
+        .unwrap_or_else(|| std::path::PathBuf::from("."))
+        .join("angry-hub")
+        .join("session.json")
+}
+
+#[cfg(all(target_os = "macos", debug_assertions))]
+impl SecretStore for CredentialStore {
+    fn load(&self) -> Option<String> {
+        std::fs::read_to_string(session_path()).ok()
+    }
+
+    fn save(&self, secret: &str) -> Result<(), String> {
+        let path = session_path();
+        if let Some(parent) = path.parent() {
+            std::fs::create_dir_all(parent).map_err(|error| error.to_string())?;
+        }
+        std::fs::write(&path, secret).map_err(|error| format!("could not save session: {error}"))?;
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            let _ = std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o600));
+        }
+        Ok(())
+    }
+
+    fn delete(&self) {
+        let _ = std::fs::remove_file(session_path());
+    }
+}
+
+#[cfg(all(target_os = "macos", not(debug_assertions)))]
 fn entry() -> Result<keyring_core::Entry, String> {
     use apple_native_keyring_store::keychain::Store;
     use keyring_core::api::CredentialStoreApi;

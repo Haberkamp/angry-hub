@@ -14,7 +14,7 @@ use homestead::Table;
 
 use crate::github::{GithubClient, ReqwestHttp, GITHUB_CLIENT_ID};
 use crate::icon;
-use crate::keychain::KeychainStore;
+use crate::keychain::CredentialStore;
 use crate::pulls::{self, Event, PullRequest, SyncState, SYNC_ROW};
 use crate::sync;
 
@@ -89,7 +89,7 @@ impl Home {
     }
 
     fn sync_job(&mut self) -> Option<SyncJob> {
-        let token = Auth::load(&KeychainStore)
+        let token = Auth::load(&CredentialStore)
             .session()
             .access_token()
             .map(str::to_string)?;
@@ -109,8 +109,8 @@ impl Home {
     }
 
     fn logout(&mut self, cx: &mut Context<Self>) {
-        let mut auth = Auth::load(&KeychainStore);
-        auth.logout(&KeychainStore);
+        let mut auth = Auth::load(&CredentialStore);
+        auth.logout(&CredentialStore);
         cx.emit(LoggedOut);
     }
 

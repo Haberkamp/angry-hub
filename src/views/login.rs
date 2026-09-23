@@ -13,7 +13,7 @@ use crate::tooltip::Tooltip;
 
 use crate::auth::Auth;
 use crate::github::{DevicePoll, GITHUB_CLIENT_ID, Github, GithubClient, ReqwestHttp};
-use crate::keychain::KeychainStore;
+use crate::keychain::CredentialStore;
 
 const OTP_TOOLTIP: &str = "Click to copy";
 const OTP_COPIED_TOOLTIP: &str = "Copied to clipboard";
@@ -206,7 +206,7 @@ impl Login {
 
     fn finish(&mut self, tokens: crate::session::Tokens) -> Result<(), String> {
         let mut auth = Auth::new();
-        auth.login(tokens, &KeychainStore)
+        auth.login(tokens, &CredentialStore)
     }
 
     fn fail(&mut self, message: &str, cx: &mut Context<Self>) {

@@ -40,7 +40,7 @@ impl Root {
     fn new(window_id: u64, window: &mut Window, cx: &mut Context<Self>) -> Self {
         frame::observe(window_id, window, cx);
         let chrome = cx.new(|_| Chrome::new(DEFAULT_WINDOW_SIZE));
-        if auth::Auth::load(&keychain::KeychainStore).check() {
+        if auth::Auth::load(&keychain::CredentialStore).check() {
             let mut root = Self {
                 chrome,
                 page: Page::Home(cx.new(|cx| Home::new(cx))),
