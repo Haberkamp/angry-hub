@@ -32,6 +32,12 @@ lint:
 test:
     cargo test --locked --all-targets --all-features
 
+# Delete the local pull request database so the next launch syncs from scratch.
+reset-db:
+    rm -f "$HOME/Library/Application Support/angry-hub/homestead.db" \
+        "$HOME/Library/Application Support/angry-hub/homestead.db-wal" \
+        "$HOME/Library/Application Support/angry-hub/homestead.db-shm"
+
 # Build the .app and embed the Icon Composer Tahoe icon (Assets.car).
 bundle:
     cargo bundle --release --format osx

@@ -12,6 +12,8 @@ mod color;
 mod frame;
 mod github;
 mod icon;
+mod pulls;
+mod sync;
 mod keychain;
 mod session;
 mod tooltip;
@@ -41,7 +43,7 @@ impl Root {
         if auth::Auth::load(&keychain::KeychainStore).check() {
             let mut root = Self {
                 chrome,
-                page: Page::Home(cx.new(|_| Home)),
+                page: Page::Home(cx.new(|cx| Home::new(cx))),
                 _logged_in: None,
             };
             root.watch_page(cx);
@@ -60,7 +62,7 @@ impl Root {
     fn watch_page(&mut self, cx: &mut Context<Self>) {
         self._logged_in = Some(match &self.page {
             Page::Login(login) => cx.subscribe(login, |this, _, _: &LoggedIn, cx| {
-                this.page = Page::Home(cx.new(|_| Home));
+                this.page = Page::Home(cx.new(|cx| Home::new(cx)));
                 this.watch_page(cx);
                 cx.notify();
             }),
