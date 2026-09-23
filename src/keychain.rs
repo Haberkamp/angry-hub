@@ -103,10 +103,7 @@ impl SecretStore for CredentialStore {
 
 #[cfg(all(target_os = "macos", debug_assertions))]
 fn session_path() -> std::path::PathBuf {
-    dirs::data_dir()
-        .unwrap_or_else(|| std::path::PathBuf::from("."))
-        .join("angry-hub")
-        .join("session.json")
+    crate::paths::support_dir().join("session.json")
 }
 
 #[cfg(all(target_os = "macos", debug_assertions))]

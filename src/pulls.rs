@@ -78,10 +78,7 @@ pub fn open() -> homestead::Result<Store<Event>> {
 }
 
 fn database_path() -> PathBuf {
-    dirs::data_dir()
-        .unwrap_or_else(|| PathBuf::from("."))
-        .join("angry-hub")
-        .join("homestead.db")
+    crate::paths::support_dir().join("homestead.db")
 }
 
 fn migrations_dir() -> PathBuf {

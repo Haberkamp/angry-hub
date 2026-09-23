@@ -273,10 +273,7 @@ fn centered(window_id: u64, screen: &Screen, default_size: (f32, f32)) -> Restor
 }
 
 fn config_path() -> std::path::PathBuf {
-    dirs::config_dir()
-        .unwrap_or_else(|| std::path::PathBuf::from("."))
-        .join("angry-hub")
-        .join("windows.json")
+    crate::paths::support_dir().join("windows.json")
 }
 
 #[cfg(test)]

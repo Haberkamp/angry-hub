@@ -13,6 +13,7 @@ mod color;
 mod frame;
 mod github;
 mod icon;
+mod paths;
 mod pulls;
 mod sync;
 mod toast;

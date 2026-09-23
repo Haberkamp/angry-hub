@@ -16,9 +16,9 @@ entitlements := "assets/macos/entitlements.plist"
 setup:
     rustup component add rustfmt clippy
 
-# Run the app.
+# Run the app. Data goes to Application Support/angry-hub-dev.
 run *args:
-    cargo run {{args}}
+    ANGRY_HUB_DATA_DIR=angry-hub-dev cargo run {{args}}
 
 # Format Rust sources.
 fmt:
@@ -34,9 +34,9 @@ test:
 
 # Delete the local pull request database so the next launch syncs from scratch.
 reset-db:
-    rm -f "$HOME/Library/Application Support/angry-hub/homestead.db" \
-        "$HOME/Library/Application Support/angry-hub/homestead.db-wal" \
-        "$HOME/Library/Application Support/angry-hub/homestead.db-shm"
+    rm -f "$HOME/Library/Application Support/angry-hub-dev/homestead.db" \
+        "$HOME/Library/Application Support/angry-hub-dev/homestead.db-wal" \
+        "$HOME/Library/Application Support/angry-hub-dev/homestead.db-shm"
 
 # Build the .app and embed the Icon Composer Tahoe icon (Assets.car).
 bundle:
@@ -65,6 +65,7 @@ sign:
         exit 1
     fi
 
+    export ANGRY_HUB_DATA_DIR=angry-hub-dev
     just bundle
 
     app="target/release/bundle/osx/{{app_name}}.app"
